@@ -20,7 +20,7 @@ import (
 //
 // Example:
 //
-//   bp := NewBufferPool(1000, 512)
+//   bp := pool.NewBufferPool(1000, 512)
 //   buf := bp.Get() // get a ready-to-use bytes.Buffer
 //   // do something with `buf`
 //   bp.Put(buf) // return buf to BufferPool
