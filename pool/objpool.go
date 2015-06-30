@@ -28,15 +28,16 @@ type ClearFunc func(interface{})
 //   op := pool.NewObjectPool(10000,
 //                            func() interface{} { return new(bytes.Buffer) },
 //                            func(obj interface{}) { obj.(*bytes.Buffer).Reset() })
-//   obj := op.Get()
+//   obj := op.Get() // get a ready-to-use bytes.Buffer
 //   buf := obj.(*bytes.Buffer)
 //   // do something with `buf`
-//   op.Put(obj)
+//   op.Put(obj) // return obj to ObjectPool. `op.Put(buf)` is OK too.
 func NewObjectPool(maxObjectNum int, createObj CreateFunc, clearObj ClearFunc) *ObjectPool {
 	return &ObjectPool{maxObjNum: maxObjectNum, createFunc: createObj, clearFunc: clearObj}
 }
 
 // ObjectPool is a goroutine-safe generic pool for objects of any type.
+// It performs about 36% slower than the other specialized object pools such as BufferPool.
 type ObjectPool struct {
 	lock       sync.Mutex
 	freeList   *object
