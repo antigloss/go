@@ -1,6 +1,9 @@
 // Author: https://github.com/antigloss
 
-// Package pool offers goroutine-safe object pools such as BufferPool
+// Package pool offers goroutine-safe object pools such as ObjectPool and BufferPool.
+//
+// ObjectPool is a generic object pool that can be used to pool objects of any type,
+// it performs about 36% slower than the other specialized object pools such as BufferPool.
 //
 // Sorry for my poor English, I've tried my best.
 package pool
@@ -70,7 +73,7 @@ func (bp *BufferPool) Put(buf *bytes.Buffer) {
 	bp.lock.Unlock()
 }
 
-// buffer holds a byte Buffer for reuse. The zero value is ready for use.
+// buffer holds a byte Buffer for reuse.
 type buffer struct {
 	buf  *bytes.Buffer
 	next *buffer
