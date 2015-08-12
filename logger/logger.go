@@ -138,35 +138,31 @@ const (
 const gLogLevelChar = "TIWEPA"
 
 // Init must be called first, otherwise this logger will not function properly!
-// It returns true if all goes well, otherwise it returns false with a message printed to `os.Stderr`.
+// It returns nil if all goes well, otherwise it returns the corresponding error.
 //   maxfiles: Must be greater than 0 and less than or equal to 100000.
 //   nfilesToDel: Number of files deleted when number of log files reaches `maxfiles`.
 //                Must be greater than 0 and less than or equal to `maxfiles`.
 //   maxsize: Maximum size of a log file in MB, 0 means unlimited.
 //   logTrace: If set to false, `logger.Trace("xxxx")` will be mute.
-func Init(logpath string, maxfiles, nfilesToDel int, maxsize uint32, logTrace bool) bool {
+func Init(logpath string, maxfiles, nfilesToDel int, maxsize uint32, logTrace bool) error {
 	err := os.MkdirAll(logpath, 0755)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logger.Init:", err)
-		return false
+		return err
 	}
 
 	if maxfiles <= 0 || maxfiles > 100000 {
-		fmt.Fprintln(os.Stderr, "maxfiles must be greater than 0 and less than or equal to 100000:", maxfiles)
-		return false
+		return fmt.Errorf("maxfiles must be greater than 0 and less than or equal to 100000: %d", maxfiles)
 	}
 
 	if nfilesToDel <= 0 || nfilesToDel > maxfiles {
-		fmt.Fprintln(os.Stderr, "nfilesToDel must be greater than 0 and less than or equal to maxfiles:",
+		return fmt.Errorf("nfilesToDel must be greater than 0 and less than or equal to maxfiles! toDel=%d maxfiles=%d",
 			nfilesToDel, maxfiles)
-		return false
 	}
 
 	// get names form the directory `logpath`
 	files, err := getDirnames(logpath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "logger.Init:", err)
-		return false
+		return err
 	}
 
 	gConf.setLogPath(logpath)
@@ -175,7 +171,7 @@ func Init(logpath string, maxfiles, nfilesToDel int, maxsize uint32, logTrace bo
 	gConf.curfiles = calcLogfileNum(files)
 	gConf.nfilesToDel = nfilesToDel
 	gConf.setMaxSize(maxsize)
-	return true
+	return nil
 }
 
 // SetLogThrough sets whether to write log to all the logfiles with less severe log level.
