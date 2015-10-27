@@ -15,8 +15,7 @@ import (
 )
 
 func main() {
-	receipt, err := goiap.VerifyReceipt("receipt",true) // Uses the sandbox environment
-
+	receipt, err := iap.VerifyReceipt("receipt", true) // Uses the sandbox environment
 	if err != nil {
 	  log.Fatal(err)
 	}
