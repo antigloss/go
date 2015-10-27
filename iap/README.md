@@ -1,7 +1,7 @@
 iap
 ======
 
-A go implementation for verifying In App Purchases via apple.
+A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
 
 ### Usage
 

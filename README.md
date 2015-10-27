@@ -4,7 +4,7 @@ Handy utilities written in go language
 
 # iap
 
-An Apple IAP lib forked from https://github.com/Pallinder/go-iap
+A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
 
 # logger
 

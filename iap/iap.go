@@ -1,4 +1,5 @@
-// Package iap implements the ability to easily validate a receipt with apples verifyReceipt service
+// Package iap implements the ability to easily validate a receipt with Apple's VerifyReceipt service (compatible with iOS6 and iOS7 response).
+// Documentation: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html#//apple_ref/doc/uid/TP40010573-CH106-SW10
 package iap
 
 import (
@@ -10,44 +11,42 @@ import (
 	"strconv"
 )
 
-// Documentation: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html#//apple_ref/doc/uid/TP40010573-CH106-SW10
-
 const (
 	appleSandboxURL    string = "https://sandbox.itunes.apple.com/verifyReceipt"
 	appleProductionURL string = "https://buy.itunes.apple.com/verifyReceipt"
 )
 
-type RequestDate struct {
+type requestDate struct {
 	RequestDate    string `json:"request_date"`
 	RequestDateMS  string `json:"request_date_ms"`
 	RequestDatePST string `json:"request_date_pst"`
 }
 
-type PurchaseDate struct {
+type purchaseDate struct {
 	PurchaseDate    string `json:"purchase_date"`
 	PurchaseDateMS  string `json:"purchase_date_ms"`
 	PurchaseDatePST string `json:"purchase_date_pst"`
 }
 
-type OriginalPurchaseDate struct {
+type originalPurchaseDate struct {
 	OriginalPurchaseDate    string `json:"original_purchase_date"`
 	OriginalPurchaseDateMS  string `json:"original_purchase_date_ms"`
 	OriginalPurchaseDatePST string `json:"original_purchase_date_pst"`
 }
 
-type ExpiresDate struct {
+type expiresDate struct {
 	ExpiresDate    string `json:"expires_date"`
 	ExpiresDateMS  string `json:"expires_date_ms"`
 	ExpiresDatePST string `json:"expires_date_pst"`
 }
 
-type CancellationDate struct {
+type cancellationDate struct {
 	CancellationDate    string `json:"cancellation_date"`
 	CancellationDateMS  string `json:"cancellation_date_ms"`
 	CancellationDatePST string `json:"cancellation_date_pst"`
 }
 
-type InApp struct {
+type inApp struct {
 	Quantity                  string `json:"quantity"`
 	ProductID                 string `json:"product_id"`
 	TransactionID             string `json:"transaction_id"`
@@ -56,10 +55,10 @@ type InApp struct {
 	AppItemID                 string `json:"app_item_id"`
 	VersionExternalIdentifier string `json:"version_external_identifier"`
 	WebOrderLineItemID        string `json:"web_order_line_item_id"`
-	PurchaseDate
-	OriginalPurchaseDate
-	ExpiresDate
-	CancellationDate
+	purchaseDate
+	originalPurchaseDate
+	expiresDate
+	cancellationDate
 }
 
 type iOS6Receipt struct {
@@ -76,9 +75,9 @@ type iOS6Receipt struct {
 	ExpiresDate                string `json:"expires_date_formatted"`
 	ExpiresDateMS              string `json:"expires_date"`
 	ExpiresDatePST             string `json:"expires_date_formatted_pst"`
-	RequestDate
-	PurchaseDate
-	OriginalPurchaseDate
+	requestDate
+	purchaseDate
+	originalPurchaseDate
 }
 
 type Receipt struct {
@@ -89,30 +88,36 @@ type Receipt struct {
 	ApplicationVersion         string  `json:"application_version"`
 	DownloadID                 int64   `json:"download_id"`
 	OriginalApplicationVersion string  `json:"original_application_version"`
-	InApp                      []InApp `json:"in_app"`
-	RequestDate
-	OriginalPurchaseDate
+	InApp                      []inApp `json:"in_app"`
+	requestDate
+	originalPurchaseDate
 }
 
 type receiptRequestData struct {
 	Receiptdata string `json:"receipt-data"`
 }
 
-// Given receiptData (base64 encoded) it tries to connect to either the sandbox (useSandbox true) or
-// apples ordinary service (useSandbox false) to validate the receipt. Returns either a receipt struct or an error.
+type iOS6ResponseData struct {
+	Status         int         `json:"status"`
+	ReceiptContent iOS6Receipt `json:"receipt"`
+}
+
+type receiptResponseData struct {
+	Status         int     `json:"status"`
+	ReceiptContent Receipt `json:"receipt"`
+}
+
+// VerifyReceipt tries to connect to either the sandbox (useSandbox true) or
+// Apple's ordinary service (useSandbox false) to validate the base64-encoded receipt (receiptData).
+// Returns either a Receipt struct or an error.
 func VerifyReceipt(receiptData string, useSandbox bool) (*Receipt, error) {
-	return sendReceiptToApple(receiptData, verificationURL(useSandbox))
-}
-
-// Selects the proper url to use when talking to apple based on if we should use the sandbox environment or not
-func verificationURL(useSandbox bool) string {
-	if useSandbox {
-		return appleSandboxURL
+	if !useSandbox {
+		return sendReceiptToApple(receiptData, appleProductionURL)
 	}
-	return appleProductionURL
+	return sendReceiptToApple(receiptData, appleSandboxURL)
 }
 
-// Sends the receipt to apple, returns the receipt or an error upon completion
+// Sends the receipt to Apple, returns the Receipt or an error upon completion.
 func sendReceiptToApple(receiptData, url string) (*Receipt, error) {
 	requestData, err := json.Marshal(receiptRequestData{receiptData})
 	if err != nil {
@@ -131,22 +136,29 @@ func sendReceiptToApple(receiptData, url string) (*Receipt, error) {
 		return nil, err
 	}
 
-	var responseData struct {
-		Status         float64     `json:"status"`
-		ReceiptContent iOS6Receipt `json:"receipt"`
-	}
+	// for iOS7
+	var responseData receiptResponseData
 	err = json.Unmarshal(body, &responseData)
 	if err != nil {
 		return nil, err
 	}
-
 	if responseData.Status != 0 {
 		return nil, verificationError(responseData.Status)
 	}
+	if len(responseData.ReceiptContent.BundleID) > 0 {
+		return &responseData.ReceiptContent, nil
+	}
 
-	return responseData.ReceiptContent.toReceipt(), nil
+	// for iOS6
+	var ios6ResponseData iOS6ResponseData
+	err = json.Unmarshal(body, &ios6ResponseData)
+	if err != nil {
+		return nil, err
+	}
+	return ios6ResponseData.ReceiptContent.toReceipt(), nil
 }
 
+// Turns an iOS6Receipt into a Receipt struct
 func (ios6 *iOS6Receipt) toReceipt() *Receipt {
 	appItemID, _ := strconv.ParseInt(ios6.AppItemID, 10, 64)
 	return &Receipt{
@@ -154,18 +166,18 @@ func (ios6 *iOS6Receipt) toReceipt() *Receipt {
 		BundleID:                   ios6.BundleID,
 		ApplicationVersion:         ios6.ApplicationVersion,
 		OriginalApplicationVersion: ios6.OriginalApplicationVersion,
-		RequestDate:                ios6.RequestDate,
-		OriginalPurchaseDate:       ios6.OriginalPurchaseDate,
-		InApp: []InApp{{
+		requestDate:                ios6.requestDate,
+		originalPurchaseDate:       ios6.originalPurchaseDate,
+		InApp: []inApp{{
 			Quantity:                  ios6.Quantity,
 			ProductID:                 ios6.ProductID,
 			TransactionID:             ios6.TransactionID,
 			OriginalTransactionID:     ios6.OriginalTransactionID,
 			VersionExternalIdentifier: ios6.VersionExternalIdentifier,
 			WebOrderLineItemID:        ios6.WebOrderLineItemID,
-			PurchaseDate:              ios6.PurchaseDate,
-			OriginalPurchaseDate:      ios6.OriginalPurchaseDate,
-			ExpiresDate: ExpiresDate{
+			purchaseDate:              ios6.purchaseDate,
+			originalPurchaseDate:      ios6.originalPurchaseDate,
+			expiresDate: expiresDate{
 				ExpiresDate:    ios6.ExpiresDate,
 				ExpiresDateMS:  ios6.ExpiresDateMS,
 				ExpiresDatePST: ios6.ExpiresDatePST,
@@ -174,7 +186,8 @@ func (ios6 *iOS6Receipt) toReceipt() *Receipt {
 	}
 }
 
-var errMsgs = map[float64]string{
+// Maps error codes to error messages.
+var errMsgs = map[int]string{
 	21000: "The App Store could not read the JSON object you provided.",
 	21002: "The data in the receipt-data property was malformed.",
 	21003: "The receipt could not be authenticated.",
@@ -185,7 +198,7 @@ var errMsgs = map[float64]string{
 	21008: "This receipt is a production receipt, but it was sent to the sandbox service for verification.",
 }
 
-// Generates the correct error based on a status error code
-func verificationError(errCode float64) error {
-	return fmt.Errorf("%f: %s", errCode, errMsgs[errCode])
+// Generates the correct error based on a status error code.
+func verificationError(errCode int) error {
+	return fmt.Errorf("%d: %s", errCode, errMsgs[errCode])
 }
