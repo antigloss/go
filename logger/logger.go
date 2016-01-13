@@ -100,7 +100,6 @@ package logger
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"path"
 	"runtime"
 	"sort"
@@ -268,26 +267,6 @@ func (conf *config) setMaxSize(maxsize uint32) {
 		conf.maxsize = int64(maxsize) * 1024 * 1024
 	} else {
 		conf.maxsize = kMaxInt64 - (1024 * 1024 * 1024 * 1024 * 1024)
-	}
-}
-
-func (conf *config) setLogPath(logpath string) {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "Unknown"
-	}
-
-	username := "Unknown"
-	curUser, err := user.Current()
-	if err == nil {
-		username = curUser.Username
-	}
-
-	conf.logPath = logpath + "/"
-	conf.pathPrefix = conf.logPath + gProgname + "." + host + "." + username + ".log."
-
-	for i := 0; i != len(gFullSymlinks); i++ {
-		gFullSymlinks[i] = conf.logPath + gSymlinks[i]
 	}
 }
 
