@@ -104,6 +104,7 @@ import (
 	"path"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -280,7 +281,8 @@ func (conf *config) setLogPath(logpath string) {
 	username := "Unknown"
 	curUser, err := user.Current()
 	if err == nil {
-		username = curUser.Username
+		tmpUsername := strings.Split(curUser.Username, "\\") // for compatible Windows
+		username = tmpUsername[len(tmpUsername)-1]
 	}
 
 	conf.logPath = logpath + "/"
