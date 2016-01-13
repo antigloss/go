@@ -281,7 +281,7 @@ func (conf *config) setLogPath(logpath string) {
 	username := "Unknown"
 	curUser, err := user.Current()
 	if err == nil {
-		tmpUsername := strings.Split(curUser.Username, "\\") // for compatible Windows
+		tmpUsername := strings.Split(curUser.Username, "\\") // for compatible with Windows
 		username = tmpUsername[len(tmpUsername)-1]
 	}
 
