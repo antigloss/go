@@ -23,6 +23,9 @@ func NewGoRoutinePool(maxGoRoutineNum int) *GoRoutinePool {
 }
 
 // GoRoutinePool is a goroutine-safe pool for goroutines.
+//
+// After benchmarking, I found that use raw `go` keyword performs much better than this GoRoutinePool.
+// So it makes no sense to use this GoRoutinePool.
 type GoRoutinePool struct {
 	lock     sync.Mutex
 	freeList *goroutine
