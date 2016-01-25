@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -9,7 +10,29 @@ import (
 	"sync/atomic"
 )
 
-func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) (sessID uint64, bodyLen int)) *SimpleMux {
+const (
+	kSimpleMuxMinHeaderSz = 9
+	kSimpleMuxMaxHeaderSz = 1024
+)
+
+type SimpleMuxHeader interface {
+	SessionID() uint64
+	BodyLen() int64
+}
+
+type Packet struct {
+	Header SimpleMuxHeader
+	Body   []byte
+}
+
+func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) SimpleMuxHeader) (*SimpleMux, error) {
+	if hdrSz < kSimpleMuxMinHeaderSz || hdrSz > kSimpleMuxMaxHeaderSz {
+		return nil, fmt.Errorf("`hdrSz` should be [%d, %d].", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
+	}
+	if hdrParser == nil {
+		return nil, fmt.Errorf("`hdrParser` must not be nil!")
+	}
+
 	mux := &SimpleMux{
 		conn:      conn,
 		hdrSz:     hdrSz,
@@ -18,19 +41,19 @@ func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) (sessID u
 	}
 	go mux.loop() // TODO how to stop the loop?
 
-	return mux
+	return mux, nil
 }
 
 type SimpleMux struct {
 	conn       net.Conn
 	hdrSz      int
-	hdrParser  func(hdr []byte) (sessID uint64, bodyLen int)
+	hdrParser  func(hdr []byte) SimpleMuxHeader
 	nextSessID uint32
 	sessLock   sync.RWMutex
 	allSess    map[uint64]*Session
 }
 
-func (mux *SimpleMux) NewSession() *Session { // TODO determine if conn is available
+func (mux *SimpleMux) NewSession() (*Session, error) { // TODO determine if conn is available
 	id := mux.getNextSessID()
 	sess := &Session{
 		id:   id,
@@ -41,24 +64,31 @@ func (mux *SimpleMux) NewSession() *Session { // TODO determine if conn is avail
 	mux.sessLock.Lock()
 	mux.allSess[id] = sess
 	mux.sessLock.Unlock()
-	return sess
+	return sess, nil
+}
+
+func (mux *SimpleMux) Close() error {
+	// TODO
+	return nil
 }
 
 func (mux *SimpleMux) loop() {
+	hdr := make([]byte, mux.hdrSz)
 	for {
-		packet := &Packet{Header: make([]byte, mux.hdrSz)}
-		_, err := io.ReadFull(mux.conn, packet.Header)
+		_, err := io.ReadFull(mux.conn, hdr)
 		if err != nil {
 			// TODO
 			break
 		}
 
-		id, bodyLen := mux.hdrParser(packet.Header)
+		muxHdr := mux.hdrParser(hdr)
+		bodyLen := muxHdr.BodyLen()
 		if bodyLen < 0 {
 			// TODO
 			break
 		}
 
+		packet := &Packet{Header: muxHdr}
 		if bodyLen > 0 {
 			packet.Body = make([]byte, bodyLen)
 			_, err := io.ReadFull(mux.conn, packet.Body)
@@ -69,8 +99,12 @@ func (mux *SimpleMux) loop() {
 		}
 
 		mux.sessLock.RLock()
-		sess := mux.allSess[id]
-		sess.buf <- packet
+		sess := mux.allSess[muxHdr.SessionID()]
+		if sess != nil {
+			sess.buf <- packet
+		} else {
+			// TODO default
+		}
 		mux.sessLock.RUnlock()
 	}
 }
@@ -86,8 +120,9 @@ func (mux *SimpleMux) getNextSessID() uint64 {
 type Session struct {
 	id   uint64
 	conn net.Conn
-	buf  chan *Packet
-	err  chan error
+	// TODO Packet List
+	buf chan *Packet
+	err chan error
 	// channel
 }
 
@@ -114,10 +149,7 @@ func (sess *Session) Recv() (packet *Packet, err error) {
 func (sess *Session) Close() error {
 	// TODO remove from SimpleMux
 	sess.conn = nil
-	return nil
-}
-
-type Packet struct {
-	Header []byte
-	Body   []byte
+	close(sess.buf) // TODO what happens when some other goroutines are now writing to this channel?
+	close(sess.err)
+	return nil // TODO return error
 }
