@@ -8,7 +8,7 @@ import (
 func NewLockfreeQueue() *LockfreeQueue {
 	var lfq LockfreeQueue
 	lfq.head = unsafe.Pointer(&lfq.dummy)
-	lfq.tail = unsafe.Pointer(&lfq.dummy)
+	lfq.tail = lfq.head
 	return &lfq
 }
 
@@ -41,8 +41,9 @@ func (lfq *LockfreeQueue) Push(val interface{}) {
 		t := atomic.LoadPointer(&lfq.tail)
 		rt := (*lfqNode)(t)
 		if atomic.CompareAndSwapPointer(&rt.next, nil, node) {
-			atomic.StorePointer(&lfq.tail, node)
-			break
+			// atomic.StorePointer(&lfq.tail, node)
+			atomic.CompareAndSwapPointer(&lfq.tail, t, node)
+			return
 		} else {
 			continue
 		}
