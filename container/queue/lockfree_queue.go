@@ -1,3 +1,6 @@
+// Author: https://github.com/antigloss
+
+// Package queue offers goroutine-safe Queue implementations such as LockfreeQueue.
 package queue
 
 import (
@@ -5,6 +8,13 @@ import (
 	"unsafe"
 )
 
+// NewLockfreeQueue is the only way to get a new, ready-to-use LockfreeQueue.
+//
+// Example:
+//
+//   lfq := queue.NewLockfreeQueue()
+//   lfq.Push(100)
+//   v := lfq.Pop()
 func NewLockfreeQueue() *LockfreeQueue {
 	var lfq LockfreeQueue
 	lfq.head = unsafe.Pointer(&lfq.dummy)
@@ -12,12 +22,14 @@ func NewLockfreeQueue() *LockfreeQueue {
 	return &lfq
 }
 
+// LockfreeQueue is a goroutine-safe Queue implementation.
 type LockfreeQueue struct {
 	head  unsafe.Pointer
 	tail  unsafe.Pointer
 	dummy lfqNode
 }
 
+// Pop returns (and removes) an element from the front of the queue, or nil if the queue is empty.
 func (lfq *LockfreeQueue) Pop() interface{} {
 	for {
 		h := atomic.LoadPointer(&lfq.head)
@@ -35,6 +47,7 @@ func (lfq *LockfreeQueue) Pop() interface{} {
 	}
 }
 
+// Push inserts an element to the back of the queue.
 func (lfq *LockfreeQueue) Push(val interface{}) {
 	node := unsafe.Pointer(&lfqNode{val: val})
 	for {
