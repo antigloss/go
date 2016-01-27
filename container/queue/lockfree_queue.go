@@ -31,7 +31,7 @@ type LockfreeQueue struct {
 }
 
 // Pop returns (and removes) an element from the front of the queue, or nil if the queue is empty.
-// It performs about 100% better than list.List.Pop() with sync.Mutex.
+// It performs about 100% better than list.List.Front() and list.List.Remove() with sync.Mutex.
 func (lfq *LockfreeQueue) Pop() interface{} {
 	for {
 		h := atomic.LoadPointer(&lfq.head)
