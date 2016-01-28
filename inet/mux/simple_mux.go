@@ -8,6 +8,7 @@ import (
 
 	"sync"
 	"sync/atomic"
+	"unsafe"
 )
 
 const (
@@ -43,6 +44,8 @@ func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) SimpleMux
 
 	return mux, nil
 }
+
+//-----------------------
 
 type SimpleMux struct {
 	conn       net.Conn
@@ -152,4 +155,62 @@ func (sess *Session) Close() error {
 	close(sess.buf) // TODO what happens when some other goroutines are now writing to this channel?
 	close(sess.err)
 	return nil // TODO return error
+}
+
+//--------------------------------------------------------
+// packetQueue
+//--------------------------------------------------------
+
+func newPacketQueue() *packetQueue {
+	var pq packetQueue
+	pq.head = unsafe.Pointer(&pq.dummy)
+	pq.tail = pq.head
+	return &pq
+}
+
+// packetQueue is a goroutine-safe Queue implementation.
+// The overall performance of packetQueue is much better than List+Mutex(standard package).
+type packetQueue struct {
+	head  unsafe.Pointer
+	tail  unsafe.Pointer
+	dummy packetNode
+}
+
+func (pq *packetQueue) pop() *Packet {
+	for {
+		h := atomic.LoadPointer(&pq.head)
+		rh := (*packetNode)(h)
+		n := (*packetNode)(atomic.LoadPointer(&rh.next))
+		if n != nil {
+			if atomic.CompareAndSwapPointer(&pq.head, h, rh.next) {
+				return n.val
+			} else {
+				continue
+			}
+		} else {
+			return nil
+		}
+	}
+}
+
+func (pq *packetQueue) push(val *Packet) {
+	node := unsafe.Pointer(&packetNode{val: val})
+	for {
+		t := atomic.LoadPointer(&pq.tail)
+		rt := (*packetNode)(t)
+		if atomic.CompareAndSwapPointer(&rt.next, nil, node) {
+			// It'll be a dead loop if atomic.StorePointer() is used.
+			// Don't know why.
+			// atomic.StorePointer(&lfq.tail, node)
+			atomic.CompareAndSwapPointer(&pq.tail, t, node)
+			return
+		} else {
+			continue
+		}
+	}
+}
+
+type packetNode struct {
+	val  *Packet
+	next unsafe.Pointer
 }
