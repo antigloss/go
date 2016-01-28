@@ -72,10 +72,11 @@ func (mux *SimpleMux) SetDefaultHandler(handler func(*Packet)) {
 func (mux *SimpleMux) NewSession() (*Session, error) { // TODO determine if conn is available
 	id := mux.getNextSessID()
 	sess := &Session{
-		id:   id,
-		conn: mux.conn,
-		buf:  make(chan *Packet, 10),
-		err:  make(chan error, 1),
+		id:         id,
+		conn:       mux.conn,
+		packets:    newPacketQueue(),
+		packetNoti: make(chan bool, 1),
+		err:        make(chan error, 1),
 	}
 	mux.sessLock.Lock()
 	mux.allSess[id] = sess
@@ -116,9 +117,13 @@ func (mux *SimpleMux) loop() {
 
 		mux.sessLock.RLock()
 		sess := mux.allSess[muxHdr.SessionID()]
+		// TODO put mux.sessLock.RUnlock() here?
 		if sess != nil {
-			sess.buf <- packet
-			// TODO add packetQueue
+			sess.packets.push(packet)
+			select {
+			case sess.packetNoti <- true:
+			default:
+			}
 		} else {
 			if mux.defHandler != nil {
 				mux.defPacketQ.push(packet)
@@ -159,11 +164,11 @@ func (mux *SimpleMux) getNextSessID() uint64 {
 }
 
 type Session struct {
-	id   uint64
-	conn net.Conn
-	// TODO Packet List
-	buf chan *Packet
-	err chan error
+	id         uint64
+	conn       net.Conn
+	packets    *packetQueue
+	packetNoti chan bool
+	err        chan error
 	// channel
 }
 
@@ -180,17 +185,32 @@ func (sess *Session) Send(b []byte) (n int, err error) {
 // TODO
 // Recv reads data from the session.
 func (sess *Session) Recv() (packet *Packet, err error) {
-	select {
-	case packet = <-sess.buf:
-	case err = <-sess.err:
+	var flag bool
+	for {
+		packet = sess.packets.pop()
+		if packet != nil {
+			return
+		}
+
+		select {
+		case flag = <-sess.packetNoti:
+		case err = <-sess.err:
+		}
+		// TODO Check periodically if packet available or session already closed
+		// in case Recv() is called simultaneously from multiple goroutines
+
+		if flag {
+			continue
+		}
+
+		return
 	}
-	return
 }
 
 func (sess *Session) Close() error {
 	// TODO remove from SimpleMux
 	sess.conn = nil
-	close(sess.buf) // TODO what happens when some other goroutines are now writing to this channel?
+	close(sess.packetNoti) // TODO what happens when some other goroutines are now writing to this channel?
 	close(sess.err)
 	return nil // TODO return error
 }
