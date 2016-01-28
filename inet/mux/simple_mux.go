@@ -45,16 +45,29 @@ func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) SimpleMux
 	return mux, nil
 }
 
-//-----------------------
-
 type SimpleMux struct {
-	conn       net.Conn
-	hdrSz      int
-	hdrParser  func(hdr []byte) SimpleMuxHeader
-	nextSessID uint32
-	sessLock   sync.RWMutex
-	allSess    map[uint64]*Session
+	conn        net.Conn
+	hdrSz       int
+	hdrParser   func(hdr []byte) SimpleMuxHeader
+	nextSessID  uint32
+	sessLock    sync.RWMutex
+	allSess     map[uint64]*Session
+	defHandler  func(*Packet) // defHandler will be invoke if session not found
+	defPacketQ  *packetQueue  // Non-session-packets will be pushed into it for defHandler
+	defNotiChnl chan bool     // Notify defHandler that there is incoming non-session-packet
 }
+
+// SetDefaultHandler
+func (mux *SimpleMux) SetDefaultHandler(handler func(*Packet)) {
+	if handler != nil && mux.defHandler == nil {
+		mux.defPacketQ = newPacketQueue()
+		mux.defNotiChnl = make(chan bool, 1)
+		go mux.procNonSessionPackets()
+	}
+	mux.defHandler = handler
+}
+
+//-----------------------
 
 func (mux *SimpleMux) NewSession() (*Session, error) { // TODO determine if conn is available
 	id := mux.getNextSessID()
@@ -105,10 +118,35 @@ func (mux *SimpleMux) loop() {
 		sess := mux.allSess[muxHdr.SessionID()]
 		if sess != nil {
 			sess.buf <- packet
+			// TODO add packetQueue
 		} else {
-			// TODO default
+			if mux.defHandler != nil {
+				mux.defPacketQ.push(packet)
+				select {
+				case mux.defNotiChnl <- true:
+				default:
+				}
+			}
 		}
 		mux.sessLock.RUnlock()
+	}
+}
+
+func (mux *SimpleMux) procNonSessionPackets() {
+	var flag bool
+	var packet *Packet
+	for {
+		packet = mux.defPacketQ.pop()
+		if packet != nil {
+			if mux.defHandler != nil {
+				mux.defHandler(packet)
+			}
+		} else {
+			flag = <-mux.defNotiChnl
+			if flag != true {
+				break
+			}
+		}
 	}
 }
 
