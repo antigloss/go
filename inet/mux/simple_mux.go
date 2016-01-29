@@ -70,7 +70,7 @@ func NewSimpleMux(conn net.Conn, hdrSz int,
 	return mux, nil
 }
 
-// SimpleMux is very useful when under the following constraints:
+// SimpleMux is a connection multiplexer. It is very useful when under the following constraints:
 //
 //   1. Can only open a few connections (probably only 1 connection) to a remote server,
 //       but want to program like there can be unlimited connections.
