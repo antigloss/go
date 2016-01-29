@@ -26,7 +26,7 @@ type Packet struct {
 	Body   []byte
 }
 
-func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) SimpleMuxHeader) (*SimpleMux, error) {
+func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) (SimpleMuxHeader, error)) (*SimpleMux, error) {
 	if hdrSz < kSimpleMuxMinHeaderSz || hdrSz > kSimpleMuxMaxHeaderSz {
 		return nil, fmt.Errorf("`hdrSz` should be [%d, %d].", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
 	}
@@ -35,26 +35,29 @@ func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) SimpleMux
 	}
 
 	mux := &SimpleMux{
-		conn:      conn,
-		hdrSz:     hdrSz,
-		hdrParser: hdrParser,
-		allSess:   make(map[uint64]*Session),
+		conn:        conn,
+		hdrSz:       hdrSz,
+		hdrParser:   hdrParser,
+		allSess:     make(map[uint64]*Session),
+		defQuitChnl: make(chan bool, 1),
 	}
-	go mux.loop() // TODO how to stop the loop?
+	go mux.loop()
 
 	return mux, nil
 }
 
 type SimpleMux struct {
+	closed      bool // Determine if this `SimpleMux` has been closed
 	conn        net.Conn
 	hdrSz       int
-	hdrParser   func(hdr []byte) SimpleMuxHeader
+	hdrParser   func(hdr []byte) (SimpleMuxHeader, error)
 	nextSessID  uint32
 	sessLock    sync.RWMutex
 	allSess     map[uint64]*Session
 	defHandler  func(*Packet) // defHandler will be invoke if session not found
 	defPacketQ  *packetQueue  // Non-session-packets will be pushed into it for defHandler
 	defNotiChnl chan bool     // Notify defHandler that there is incoming non-session-packet
+	defQuitChnl chan bool     // Notify defHandler to quit
 }
 
 // SetDefaultHandler
@@ -67,11 +70,9 @@ func (mux *SimpleMux) SetDefaultHandler(handler func(*Packet)) {
 	mux.defHandler = handler
 }
 
-//-----------------------
-
-func (mux *SimpleMux) NewSession() (*Session, error) { // TODO determine if conn is available
+func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	id := mux.getNextSessID()
-	sess := &Session{
+	sess = &Session{
 		id:         id,
 		conn:       mux.conn,
 		packets:    newPacketQueue(),
@@ -79,66 +80,67 @@ func (mux *SimpleMux) NewSession() (*Session, error) { // TODO determine if conn
 		err:        make(chan error, 1),
 	}
 	mux.sessLock.Lock()
-	mux.allSess[id] = sess
+	if !mux.closed {
+		mux.allSess[id] = sess
+	} else {
+		sess = nil
+		err = kSimpleMuxClosed
+	}
 	mux.sessLock.Unlock()
-	return sess, nil
+	return
 }
 
-func (mux *SimpleMux) Close() error {
-	// TODO
-	return nil
+func (mux *SimpleMux) Close() {
+	mux.close(kSimpleMuxClosed)
 }
 
 func (mux *SimpleMux) loop() {
+	var muxHdr SimpleMuxHeader
+	var err error
 	hdr := make([]byte, mux.hdrSz)
 	for {
-		_, err := io.ReadFull(mux.conn, hdr)
+		_, err = io.ReadFull(mux.conn, hdr)
 		if err != nil {
-			// TODO
 			break
 		}
 
-		muxHdr := mux.hdrParser(hdr)
-		bodyLen := muxHdr.BodyLen()
-		if bodyLen < 0 {
-			// TODO
+		muxHdr, err = mux.hdrParser(hdr)
+		if err != nil {
 			break
 		}
 
 		packet := &Packet{Header: muxHdr}
+		bodyLen := muxHdr.BodyLen()
 		if bodyLen > 0 {
 			packet.Body = make([]byte, bodyLen)
-			_, err := io.ReadFull(mux.conn, packet.Body)
+			_, err = io.ReadFull(mux.conn, packet.Body)
 			if err != nil {
-				// TODO
 				break
 			}
 		}
 
 		mux.sessLock.RLock()
+		if mux.closed {
+			break
+		}
 		sess := mux.allSess[muxHdr.SessionID()]
-		// TODO put mux.sessLock.RUnlock() here?
+		mux.sessLock.RUnlock()
 		if sess != nil {
 			sess.packets.push(packet)
-			select {
-			case sess.packetNoti <- true:
-			default:
-			}
+			asyncNotify(sess.packetNoti)
 		} else {
 			if mux.defHandler != nil {
 				mux.defPacketQ.push(packet)
-				select {
-				case mux.defNotiChnl <- true:
-				default:
-				}
+				asyncNotify(mux.defNotiChnl)
 			}
 		}
-		mux.sessLock.RUnlock()
 	}
+
+	mux.close(err)
 }
 
 func (mux *SimpleMux) procNonSessionPackets() {
-	var flag bool
+	var closed bool
 	var packet *Packet
 	for {
 		packet = mux.defPacketQ.pop()
@@ -147,12 +149,30 @@ func (mux *SimpleMux) procNonSessionPackets() {
 				mux.defHandler(packet)
 			}
 		} else {
-			flag = <-mux.defNotiChnl
-			if flag != true {
+			select {
+			case <-mux.defNotiChnl:
+			case closed = <-mux.defQuitChnl:
+			}
+			if closed {
 				break
 			}
 		}
 	}
+}
+
+func (mux *SimpleMux) close(err error) {
+	mux.sessLock.Lock()
+	if !mux.closed {
+		// Notify all sessions that error occurs
+		for _, sess := range mux.allSess {
+			asyncNotifyError(sess.err, err)
+		}
+		mux.defQuitChnl <- true
+		mux.allSess = nil
+		mux.closed = true
+		mux.conn.Close()
+	}
+	mux.sessLock.Unlock()
 }
 
 func (mux *SimpleMux) getNextSessID() uint64 {
@@ -163,13 +183,30 @@ func (mux *SimpleMux) getNextSessID() uint64 {
 	return ((uint64(time.Now().Unix()) << 32) | uint64(baseID))
 }
 
+func asyncNotify(ch chan bool) {
+	select {
+	case ch <- true:
+	default:
+	}
+}
+
+func asyncNotifyError(ch chan error, err error) {
+	select {
+	case ch <- err:
+	default:
+	}
+}
+
+var kSimpleMuxClosed = fmt.Errorf("This SimpleMux object has already been closed.")
+
+//------------------------------------------------------------------
+
 type Session struct {
 	id         uint64
 	conn       net.Conn
 	packets    *packetQueue
 	packetNoti chan bool
 	err        chan error
-	// channel
 }
 
 func (sess *Session) ID() uint64 {
