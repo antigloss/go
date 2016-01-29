@@ -1,10 +1,10 @@
 // Author: https://github.com/antigloss
 
-// Package mux is a multiplexing library for Golang.
+// Package mux (short for multiplexer) is a multiplexing package for Golang.
 //
 // In some rare cases, we can only open a few connections to a remote server,
 // but we want to program like we can open unlimited connections.
-// Should you meet this rare cases, then this package is what you exactly need.
+// Should you encounter this rare cases, then this package is exactly what you need.
 package mux
 
 import (
