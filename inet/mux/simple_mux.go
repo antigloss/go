@@ -1,3 +1,10 @@
+// Author: https://github.com/antigloss
+
+// Package mux is a multiplexing library for Golang.
+//
+// In some rare cases, we can only open a few connections to a remote server,
+// but we want to program like we can open unlimited connections.
+// Should you meet this rare cases, then this package is what you exactly need.
 package mux
 
 import (
@@ -16,17 +23,28 @@ const (
 	kSimpleMuxMaxHeaderSz = 1024
 )
 
+// SimpleMuxHeader
 type SimpleMuxHeader interface {
 	SessionID() uint64
 	BodyLen() int64
 }
 
+// Packet holds the protocol data receive from the remote server.
 type Packet struct {
-	Header SimpleMuxHeader
-	Body   []byte
+	Header SimpleMuxHeader // protocol header
+	Body   []byte          // protocol body
 }
 
-func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) (SimpleMuxHeader, error)) (*SimpleMux, error) {
+// NewSimpleMux is the only way to get a new, ready-to-use SimpleMux.
+//
+//   conn: Connection to the remote server. Once a connection has been assigned to a SimpleMux,
+//         you should never use it elsewhere, otherwise it might cause the SimpleMux to malfunction.
+//   hdrSz: Size (in bytes) of protocol header for communicating with the remote server.
+//   hdrParser: Function to parser the header. Returns (hdr, nil) on success, or (nil, err) on error.
+//   defHandler: Handler function for handling packets without an associated session. Could be nil.
+func NewSimpleMux(conn net.Conn, hdrSz int,
+	hdrParser func(hdr []byte) (SimpleMuxHeader, error),
+	defHandler func(*Packet)) (*SimpleMux, error) {
 	if hdrSz < kSimpleMuxMinHeaderSz || hdrSz > kSimpleMuxMaxHeaderSz {
 		return nil, fmt.Errorf("`hdrSz` should be [%d, %d].", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
 	}
@@ -35,17 +53,34 @@ func NewSimpleMux(conn net.Conn, hdrSz int, hdrParser func(hdr []byte) (SimpleMu
 	}
 
 	mux := &SimpleMux{
-		conn:        conn,
-		hdrSz:       hdrSz,
-		hdrParser:   hdrParser,
-		allSess:     make(map[uint64]*Session),
-		defQuitChnl: make(chan bool, 1),
+		conn:      conn,
+		hdrSz:     hdrSz,
+		hdrParser: hdrParser,
+		allSess:   make(map[uint64]*Session),
+	}
+	if defHandler != nil {
+		mux.defHandler = defHandler
+		mux.defPacketQ = newPacketQueue()
+		mux.defNotiChnl = make(chan bool, 1)
+		mux.defQuitChnl = make(chan bool, 1)
+		go mux.procNonSessionPackets()
 	}
 	go mux.loop()
 
 	return mux, nil
 }
 
+// SimpleMux is very useful when under the following constraints:
+//
+//   1. Can only open a few connections (probably only 1 connection) to a remote server,
+//       but want to program like there can be unlimited connections.
+//   2. The remote server has its own protocol format which could not be changed.
+//   3. Fortunately, we can set 8 bytes of information to the protocol header which
+//       will remain the same in the server's response.
+//
+// All methods of SimpleMux are goroutine-safe.
+//
+// Seek to simple_mux_test.go for detailed usage.
 type SimpleMux struct {
 	closed      bool // Determine if this `SimpleMux` has been closed
 	conn        net.Conn
@@ -60,21 +95,18 @@ type SimpleMux struct {
 	defQuitChnl chan bool     // Notify defHandler to quit
 }
 
-// SetDefaultHandler
-func (mux *SimpleMux) SetDefaultHandler(handler func(*Packet)) {
-	if handler != nil && mux.defHandler == nil {
-		mux.defPacketQ = newPacketQueue()
-		mux.defNotiChnl = make(chan bool, 1)
-		go mux.procNonSessionPackets()
-	}
-	mux.defHandler = handler
-}
-
+// NewSession is used to create a new session.
+// You can create as many sessions as you want.
+// All sessions are base on the single connecions of the SimpleMux,
+// but they act like they are separate connections.
+//
+//   Note: Methods of Session are not goroutine-safe.
+//         One session is intended to be used within one goroutine.
 func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	id := mux.getNextSessID()
 	sess = &Session{
 		id:         id,
-		conn:       mux.conn,
+		mux:        mux,
 		packets:    newPacketQueue(),
 		packetNoti: make(chan bool, 1),
 		err:        make(chan error, 1),
@@ -90,6 +122,10 @@ func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	return
 }
 
+// Close is used to close the SimpleMux (including its underlying connection)
+// and all sessions.
+//
+//   Note: After finish using a SimpleMux, Close must be called to release resources.
 func (mux *SimpleMux) Close() {
 	mux.close(kSimpleMuxClosed)
 }
@@ -145,9 +181,7 @@ func (mux *SimpleMux) procNonSessionPackets() {
 	for {
 		packet = mux.defPacketQ.pop()
 		if packet != nil {
-			if mux.defHandler != nil {
-				mux.defHandler(packet)
-			}
+			mux.defHandler(packet)
 		} else {
 			select {
 			case <-mux.defNotiChnl:
@@ -167,10 +201,20 @@ func (mux *SimpleMux) close(err error) {
 		for _, sess := range mux.allSess {
 			asyncNotifyError(sess.err, err)
 		}
-		mux.defQuitChnl <- true
+		if mux.defHandler != nil {
+			mux.defQuitChnl <- true
+		}
 		mux.allSess = nil
 		mux.closed = true
 		mux.conn.Close()
+	}
+	mux.sessLock.Unlock()
+}
+
+func (mux *SimpleMux) closeSession(sessID uint64) {
+	mux.sessLock.Lock()
+	if !mux.closed {
+		delete(mux.allSess, sessID)
 	}
 	mux.sessLock.Unlock()
 }
@@ -200,57 +244,109 @@ func asyncNotifyError(ch chan error, err error) {
 var kSimpleMuxClosed = fmt.Errorf("This SimpleMux object has already been closed.")
 
 //------------------------------------------------------------------
+// Session
+//------------------------------------------------------------------
 
+// Session is created from a SimpleMux. You can create as many sessions as you want.
+// All sessions are base on the single connecions of the SimpleMux,
+// but they act like they are separate connections.
+//
+// Session supports bi-directional communication and server-side push.
+//
+//   Note: Methods of Session are not goroutine-safe.
+//         One session is intended to be used within one goroutine.
 type Session struct {
 	id         uint64
-	conn       net.Conn
+	mux        *SimpleMux
 	packets    *packetQueue
+	rdTimeout  time.Duration
 	packetNoti chan bool
 	err        chan error
 }
 
+// ID returns the ID of this session.
 func (sess *Session) ID() uint64 {
 	return sess.id
 }
 
-// TODO
-// Send writes data to the session.
-func (sess *Session) Send(b []byte) (n int, err error) {
-	return sess.conn.Write(b)
+// Send is used to write to the session.
+// For some good reasons, Send dosen't support timeout.
+func (sess *Session) Send(b []byte) (int, error) {
+	if sess.mux != nil {
+		return sess.mux.conn.Write(b)
+	}
+	return 0, kSessionClosed
 }
 
-// TODO
 // Recv reads data from the session.
+// Returns net.Error at timeout, use err.(net.Error).Timeout()
+// to determine if timeout occurs.
 func (sess *Session) Recv() (packet *Packet, err error) {
-	var flag bool
 	for {
 		packet = sess.packets.pop()
 		if packet != nil {
 			return
 		}
 
+		var flag bool
+		var timeout <-chan time.Time
+		if sess.rdTimeout > 0 {
+			timeout = time.After(sess.rdTimeout)
+		}
 		select {
 		case flag = <-sess.packetNoti:
 		case err = <-sess.err:
+		case <-timeout:
 		}
-		// TODO Check periodically if packet available or session already closed
-		// in case Recv() is called simultaneously from multiple goroutines
 
 		if flag {
 			continue
 		}
 
+		if err == nil {
+			err = kSessionRdTimeout
+		}
 		return
 	}
 }
 
-func (sess *Session) Close() error {
-	// TODO remove from SimpleMux
-	sess.conn = nil
-	close(sess.packetNoti) // TODO what happens when some other goroutines are now writing to this channel?
-	close(sess.err)
-	return nil // TODO return error
+// SetRecvTimeout sets timeout to the session.
+// After calling this method, all subsequent calls to Recv() will
+// timeout after the specified `timeout`.
+//
+// Should you want to cancel the timeout setting, just call SetRecvTimeout(0)
+//
+//   Example:
+//       sess.SetRecvTimeout(5 * time.Millisecond)
+func (sess *Session) SetRecvTimeout(timeout time.Duration) {
+	sess.rdTimeout = timeout
 }
+
+// Close is used to close the session.
+// After finish using a Session, Close() must be called to release resources.
+func (sess *Session) Close() {
+	if sess.mux != nil {
+		sess.mux.closeSession(sess.ID())
+		sess.mux = nil
+	}
+}
+
+type timeoutError string
+
+func (e timeoutError) Error() string {
+	return string(e)
+}
+
+func (e timeoutError) Timeout() bool {
+	return true
+}
+
+func (e timeoutError) Temporary() bool {
+	return true
+}
+
+var kSessionClosed = fmt.Errorf("This session has already been closed.")
+var kSessionRdTimeout = timeoutError("This session has already been closed.")
 
 //--------------------------------------------------------
 // packetQueue
