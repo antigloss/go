@@ -17,3 +17,9 @@ Package pool offers goroutine-safe object pools such as ObjectPool and BufferPoo
 # container/queue
 
 Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
+
+# inet/mux
+
+Package mux (short for connection multiplexer) is a multiplexing package for Golang.
+
+In some rare cases, we can only open a few connections to a remote server, but we want to program like we can open unlimited connections. Should you encounter this rare cases, then this package is exactly what you need.
