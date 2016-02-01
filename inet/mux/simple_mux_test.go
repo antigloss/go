@@ -123,6 +123,6 @@ func hdrParser(hdr []byte) (SimpleMuxHeader, error) {
 
 var gHdlrCallTimes int
 
-func defHandler(packet *Packet) {
+func defHandler(defSess *Session, packet *Packet) {
 	gHdlrCallTimes++
 }

@@ -42,9 +42,12 @@ type Packet struct {
 //   hdrSz: Size (in bytes) of protocol header for communicating with the remote server.
 //   hdrParser: Function to parser the header. Returns (hdr, nil) on success, or (nil, err) on error.
 //   defHandler: Handler function for handling packets without an associated session. Could be nil.
+//               `defSess` is the default session for sending information back to the remote server if necessary.
+//                        Do not close this `defSess`, otherwise you can't use it later.
+//               `packet` is the current packet received whose associated session could not be found.
 func NewSimpleMux(conn net.Conn, hdrSz int,
 	hdrParser func(hdr []byte) (SimpleMuxHeader, error),
-	defHandler func(*Packet)) (*SimpleMux, error) {
+	defHandler func(defSess *Session, packet *Packet)) (*SimpleMux, error) {
 	if hdrSz < kSimpleMuxMinHeaderSz || hdrSz > kSimpleMuxMaxHeaderSz {
 		return nil, fmt.Errorf("`hdrSz` should be [%d, %d].", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
 	}
@@ -89,10 +92,10 @@ type SimpleMux struct {
 	nextSessID  uint32
 	sessLock    sync.RWMutex
 	allSess     map[uint64]*Session
-	defHandler  func(*Packet) // defHandler will be invoke if session not found
-	defPacketQ  *packetQueue  // Non-session-packets will be pushed into it for defHandler
-	defNotiChnl chan bool     // Notify defHandler that there is incoming non-session-packet
-	defQuitChnl chan bool     // Notify defHandler to quit
+	defHandler  func(*Session, *Packet) // defHandler will be invoke if session not found
+	defPacketQ  *packetQueue            // Non-session-packets will be pushed into it for defHandler
+	defNotiChnl chan bool               // Notify defHandler that there is incoming non-session-packet
+	defQuitChnl chan bool               // Notify defHandler to quit
 }
 
 // NewSession is used to create a new session.
@@ -104,13 +107,7 @@ type SimpleMux struct {
 //         One session is intended to be used within one goroutine.
 func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	id := mux.getNextSessID()
-	sess = &Session{
-		id:         id,
-		mux:        mux,
-		packets:    newPacketQueue(),
-		packetNoti: make(chan bool, 1),
-		err:        make(chan error, 1),
-	}
+	sess = newSession(id, mux)
 	mux.sessLock.Lock()
 	if !mux.closed {
 		mux.allSess[id] = sess
@@ -176,12 +173,13 @@ func (mux *SimpleMux) loop() {
 }
 
 func (mux *SimpleMux) procNonSessionPackets() {
+	defSess := newSession(0, mux)
 	var closed bool
 	var packet *Packet
 	for {
 		packet = mux.defPacketQ.pop()
 		if packet != nil {
-			mux.defHandler(packet)
+			mux.defHandler(defSess, packet)
 		} else {
 			select {
 			case <-mux.defNotiChnl:
@@ -246,6 +244,16 @@ var kSimpleMuxClosed = fmt.Errorf("This SimpleMux object has already been closed
 //------------------------------------------------------------------
 // Session
 //------------------------------------------------------------------
+
+func newSession(id uint64, mux *SimpleMux) *Session {
+	return &Session{
+		id:         id,
+		mux:        mux,
+		packets:    newPacketQueue(),
+		packetNoti: make(chan bool, 1),
+		err:        make(chan error, 1),
+	}
+}
 
 // Session is created from a SimpleMux. You can create as many sessions as you want.
 // All sessions are base on the single connecions of the SimpleMux,
