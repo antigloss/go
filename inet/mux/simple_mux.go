@@ -119,6 +119,16 @@ func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	return
 }
 
+// LocalAddr returns the local address of the underlying connection.
+func (mux *SimpleMux) LocalAddr() net.Addr {
+	return mux.conn.LocalAddr()
+}
+
+// RemoteAddr returns the remote address of the underlying connection.
+func (mux *SimpleMux) RemoteAddr() net.Addr {
+	return mux.conn.RemoteAddr()
+}
+
 // Close is used to close the SimpleMux (including its underlying connection)
 // and all sessions.
 //
@@ -328,6 +338,16 @@ func (sess *Session) Recv() (packet *Packet, err error) {
 //       sess.SetRecvTimeout(5 * time.Millisecond)
 func (sess *Session) SetRecvTimeout(timeout time.Duration) {
 	sess.rdTimeout = timeout
+}
+
+// LocalAddr returns the local address of the underlying connection.
+func (sess *Session) LocalAddr() net.Addr {
+	return sess.mux.LocalAddr()
+}
+
+// RemoteAddr returns the remote address of the underlying connection.
+func (sess *Session) RemoteAddr() net.Addr {
+	return sess.mux.RemoteAddr()
 }
 
 // Close is used to close the session.
