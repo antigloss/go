@@ -134,6 +134,7 @@ const (
 	kFlagLogThrough
 	kFlagLogFuncName
 	kFlagLogFilenameLineNum
+	kFlagLogToConsole
 )
 
 const gLogLevelChar = "TIWEPA"
@@ -191,6 +192,12 @@ func SetLogFunctionName(on bool) {
 // By default, filename and line number are logged down. You can turn it off for better performance.
 func SetLogFilenameLineNum(on bool) {
 	gConf.setFlags(kFlagLogFilenameLineNum, on)
+}
+
+// SetLogToConsole sets whether to output logs to the console.
+// By default, logs are not output to the console.
+func SetLogToConsole(on bool) {
+	gConf.setFlags(kFlagLogToConsole, on)
 }
 
 // Trace logs down a log with trace level.
@@ -262,6 +269,10 @@ func (conf *config) logFuncName() bool {
 
 func (conf *config) logFilenameLineNum() bool {
 	return (conf.logflags & kFlagLogFilenameLineNum) != 0
+}
+
+func (conf *config) logToConsole() bool {
+	return (conf.logflags & kFlagLogToConsole) != 0
 }
 
 func (conf *config) setMaxSize(maxsize uint32) {
@@ -516,6 +527,9 @@ func log(logLevel int, format string, args []interface{}) {
 		}
 	} else {
 		gLoggers[logLevel].log(t, output)
+	}
+	if gConf.logToConsole() {
+		fmt.Print(string(output))
 	}
 
 	gBufPool.putBuffer(buf)
