@@ -428,6 +428,9 @@ func (a byCreatedTime) Swap(i, j int) {
 // Besides initializations that cannot be expressed as declarations, a common use of init functions is to verify
 // or repair correctness of the program state before real execution begins.
 func init() {
+	tmpProgname := strings.Split(gProgname, "\\") // for compatible with `go run` under Windows
+	gProgname = tmpProgname[len(tmpProgname)-1]
+
 	for i := 0; i != kLogLevelMax; i++ {
 		gLoggers[i].level = i
 		gSymlinks[i] = gProgname + "." + gLogLevelNames[i]
