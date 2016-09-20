@@ -11,7 +11,7 @@ write logs with different severity levels. Logs with different severity levels a
 	2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
 	3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
 	4. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
-	5. Symlinks `PROG_NAME`.`SEVERITY_LEVEL` will always link to the most current logfiles.
+	5. Symlinks `PROG_NAME`.`USER_NAME`.`SEVERITY_LEVEL` will always link to the most current logfiles.
 	6. Goroutine-safe.
 
 # Basic example
@@ -31,7 +31,7 @@ write logs with different severity levels. Logs with different severity levels a
 
 	import (
 		"fmt"
-		"github.com/antigloss/logger"
+		"github.com/antigloss/go/logger"
 		"runtime"
 		"sync"
 		"time"

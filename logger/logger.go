@@ -12,7 +12,7 @@ Features:
 	2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
 	3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
 	4. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
-	5. Symlinks `PROG_NAME`.`SEVERITY_LEVEL` will always link to the most current logfiles.
+	5. Symlinks `PROG_NAME`.`USER_NAME`.`SEVERITY_LEVEL` will always link to the most current logfiles.
 	6. Goroutine-safe.
 
 Basic example:
@@ -32,7 +32,7 @@ Performance:
 
 	import (
 		"fmt"
-		"github.com/antigloss/logger"
+		"github.com/antigloss/go/logger"
 		"runtime"
 		"sync"
 		"time"
@@ -112,8 +112,8 @@ import (
 // consts
 const (
 	kMaxInt64          = int64(^uint64(0) >> 1)
-	kLogCreatedTimeLen = 21
-	kLogFilenameMinLen = 36
+	kLogCreatedTimeLen = 24
+	kLogFilenameMinLen = 29
 )
 
 // log level
@@ -137,7 +137,15 @@ const (
 	kFlagLogToConsole
 )
 
-const gLogLevelChar = "TIWEPA"
+// const strings
+const (
+	// Default filename prefix for logfiles
+	DefFilenamePrefix = "%P.%H.%U"
+	// Default filename prefix for symlinks to logfiles
+	DefSymlinkPrefix = "%P.%U"
+
+	kLogLevelChar = "TIWEPA"
+)
 
 // Init must be called first, otherwise this logger will not function properly!
 // It returns nil if all goes well, otherwise it returns the corresponding error.
@@ -161,19 +169,12 @@ func Init(logpath string, maxfiles, nfilesToDel int, maxsize uint32, logTrace bo
 			nfilesToDel, maxfiles)
 	}
 
-	// get names form the directory `logpath`
-	files, err := getDirnames(logpath)
-	if err != nil {
-		return err
-	}
-
-	gConf.setLogPath(logpath)
+	gConf.logPath = logpath + "/"
 	gConf.setFlags(kFlagLogTrace, logTrace)
 	gConf.maxfiles = maxfiles
-	gConf.curfiles = calcLogfileNum(files)
 	gConf.nfilesToDel = nfilesToDel
 	gConf.setMaxSize(maxsize)
-	return nil
+	return SetFilenamePrefix(DefFilenamePrefix, DefSymlinkPrefix)
 }
 
 // SetLogThrough sets whether to write log to all the logfiles with less severe log level.
@@ -198,6 +199,28 @@ func SetLogFilenameLineNum(on bool) {
 // By default, logs are not output to the console.
 func SetLogToConsole(on bool) {
 	gConf.setFlags(kFlagLogToConsole, on)
+}
+
+// SetFilenamePrefix sets filename prefix for the logfiles and symlinks of the logfiles.
+//
+// Filename format for logfiles is `PREFIX`.`SEVERITY_LEVEL`.`DATE_TIME`.log
+//
+// Filename format for symlinks is `PREFIX`.`SEVERITY_LEVEL`
+//
+// 3 kinds of placeholders can be used in the prefix: %P, %H and %U.
+//
+// %P means program name, %H means hostname, %U means username.
+//
+// The default prefix for a log filename is logger.DefFilenamePrefix ("%P.%H.%U").
+// The default prefix for a symlink is logger.DefSymlinkPrefix ("%P.%U").
+func SetFilenamePrefix(logfilenamePrefix, symlinkPrefix string) error {
+	gConf.setFilenamePrefix(logfilenamePrefix, symlinkPrefix)
+
+	files, err := getLogfilenames(gConf.logPath)
+	if err == nil {
+		gConf.curfiles = len(files)
+	}
+	return err
 }
 
 // Trace logs down a log with trace level.
@@ -283,7 +306,7 @@ func (conf *config) setMaxSize(maxsize uint32) {
 	}
 }
 
-func (conf *config) setLogPath(logpath string) {
+func (conf *config) setFilenamePrefix(filenamePrefix, symlinkPrefix string) {
 	host, err := os.Hostname()
 	if err != nil {
 		host = "Unknown"
@@ -296,10 +319,26 @@ func (conf *config) setLogPath(logpath string) {
 		username = tmpUsername[len(tmpUsername)-1]
 	}
 
-	conf.logPath = logpath + "/"
-	conf.pathPrefix = conf.logPath + gProgname + "." + host + "." + username + ".log."
+	conf.pathPrefix = conf.logPath
+	if len(filenamePrefix) > 0 {
+		filenamePrefix = strings.Replace(filenamePrefix, "%P", gProgname, -1)
+		filenamePrefix = strings.Replace(filenamePrefix, "%H", host, -1)
+		filenamePrefix = strings.Replace(filenamePrefix, "%U", username, -1)
+		conf.pathPrefix = conf.pathPrefix + filenamePrefix + "."
+	}
 
-	for i := 0; i != len(gFullSymlinks); i++ {
+	if len(symlinkPrefix) > 0 {
+		symlinkPrefix = strings.Replace(symlinkPrefix, "%P", gProgname, -1)
+		symlinkPrefix = strings.Replace(symlinkPrefix, "%H", host, -1)
+		symlinkPrefix = strings.Replace(symlinkPrefix, "%U", username, -1)
+		symlinkPrefix += "."
+	}
+
+	isSymlink = map[string]bool{}
+	for i := 0; i != kLogLevelMax; i++ {
+		gLoggers[i].level = i
+		gSymlinks[i] = symlinkPrefix + gLogLevelNames[i]
+		isSymlink[gSymlinks[i]] = true
 		gFullSymlinks[i] = conf.logPath + gSymlinks[i]
 	}
 }
@@ -319,6 +358,8 @@ func (l *logger) log(t time.Time, data []byte) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	if l.size >= gConf.maxsize || l.day != d || l.file == nil {
+		hour, min, sec := t.Clock()
+
 		gConf.purgeLock.Lock()
 		hasLocked := true
 		defer func() {
@@ -328,20 +369,20 @@ func (l *logger) log(t time.Time, data []byte) {
 		}()
 		// reaches limit of number of log files
 		if gConf.curfiles >= gConf.maxfiles {
-			files, err := getDirnames(gConf.logPath)
+			files, err := getLogfilenames(gConf.logPath)
 			if err != nil {
 				l.errlog(t, data, err)
 				return
 			}
 
-			if len(files) >= gConf.maxfiles {
+			gConf.curfiles = len(files)
+			if gConf.curfiles >= gConf.maxfiles {
 				sort.Sort(byCreatedTime(files))
 				nfiles := gConf.curfiles - gConf.maxfiles + gConf.nfilesToDel
-				if nfiles > len(files) {
-					nfiles = len(files)
-					gConf.curfiles = nfiles
+				if nfiles > gConf.curfiles {
+					nfiles = gConf.curfiles
 				}
-				for i := 0; i != nfiles; i++ {
+				for i := 0; i < nfiles; i++ {
 					err := os.RemoveAll(gConf.logPath + files[i])
 					if err == nil {
 						gConf.curfiles--
@@ -349,13 +390,11 @@ func (l *logger) log(t time.Time, data []byte) {
 						l.errlog(t, nil, err)
 					}
 				}
-			} else {
-				gConf.curfiles = calcLogfileNum(files)
 			}
 		}
 
-		filename := fmt.Sprintf("%s%s.%d%02d%02d-%012d", gConf.pathPrefix, gLogLevelNames[l.level],
-			y, m, d, (t.UnixNano()/1000)%1000000000000)
+		filename := fmt.Sprintf("%s%s.%d%02d%02d%02d%02d%02d%06d.log", gConf.pathPrefix, gLogLevelNames[l.level],
+			y, m, d, hour, min, sec, (t.Nanosecond() / 1000))
 		newfile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			l.errlog(t, data, err)
@@ -416,14 +455,8 @@ func (a byCreatedTime) Len() int {
 func (a byCreatedTime) Less(i, j int) bool {
 	s1, s2 := a[i], a[j]
 	if len(s1) < kLogFilenameMinLen {
-		if isSymlink[s1] {
-			return false
-		}
 		return true
 	} else if len(s2) < kLogFilenameMinLen {
-		if isSymlink[s2] {
-			return true
-		}
 		return false
 	} else {
 		return s1[len(s1)-kLogCreatedTimeLen:] < s2[len(s2)-kLogCreatedTimeLen:]
@@ -442,40 +475,37 @@ func init() {
 	tmpProgname := strings.Split(gProgname, "\\") // for compatible with `go run` under Windows
 	gProgname = tmpProgname[len(tmpProgname)-1]
 
-	for i := 0; i != kLogLevelMax; i++ {
-		gLoggers[i].level = i
-		gSymlinks[i] = gProgname + "." + gLogLevelNames[i]
-		isSymlink[gSymlinks[i]] = true
-	}
-
-	gConf.setLogPath("./log")
+	gConf.setFilenamePrefix(DefFilenamePrefix, DefSymlinkPrefix)
 }
 
 // helpers
-func getDirnames(dir string) ([]string, error) {
+func getLogfilenames(dir string) ([]string, error) {
+	var filenames []string
 	f, err := os.Open(dir)
 	if err == nil {
-		defer f.Close()
-		return f.Readdirnames(0)
-	}
-	return nil, err
-}
-
-func calcLogfileNum(files []string) int {
-	curfiles := 0
-	for _, filename := range files {
-		if isSymlink[filename] == false {
-			curfiles++
+		filenames, err = f.Readdirnames(0)
+		f.Close()
+		if err == nil {
+			nfiles := len(filenames)
+			for i := 0; i < nfiles; {
+				if isSymlink[filenames[i]] == false {
+					i++
+				} else {
+					nfiles--
+					filenames[i] = filenames[nfiles]
+					filenames = filenames[:nfiles]
+				}
+			}
 		}
 	}
-	return curfiles
+	return filenames, err
 }
 
 func genLogPrefix(buf *buffer, logLevel, skip int, t time.Time) {
 	h, m, s := t.Clock()
 
 	// time
-	buf.tmp[0] = gLogLevelChar[logLevel]
+	buf.tmp[0] = kLogLevelChar[logLevel]
 	buf.twoDigits(1, h)
 	buf.tmp[3] = ':'
 	buf.twoDigits(4, m)
@@ -542,6 +572,7 @@ var gLogLevelNames = [kLogLevelMax]string{
 }
 
 var gConf = config{
+	logPath:     "./log/",
 	logflags:    kFlagLogFilenameLineNum | kFlagLogThrough,
 	maxfiles:    400,
 	nfilesToDel: 10,
@@ -549,7 +580,7 @@ var gConf = config{
 }
 
 var gSymlinks [kLogLevelMax]string
-var isSymlink = map[string]bool{}
+var isSymlink map[string]bool
 var gFullSymlinks [kLogLevelMax]string
 var gBufPool bufferPool
 var gLoggers [kLogLevelMax]logger
