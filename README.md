@@ -14,6 +14,10 @@ Package logger is a go logging facility which provides functions Trace, Info, Wa
 
 Package pool offers goroutine-safe object pools such as ObjectPool and BufferPool.
 
+# container/lomap
+
+Package lomap implements an linked ordered map which supports iteration in insertion order.
+
 # container/queue
 
 Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
