@@ -196,18 +196,18 @@ func verifySortedOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 	sortedNums.Sort()
 
 	i := 0
-	for node := rbt.orderedHead; node != nil; node = node.orderedNext {
-		if sortedNums[i] != node.v.(int) {
-			t.Errorf("%s. Ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], node.v.(int))
+	for it := rbt.Iterator(); it.IsValid(); it.Next() {
+		if sortedNums[i] != it.Value().(int) {
+			t.Errorf("%s. Ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value().(int))
 			return false
 		}
 		i++
 	}
 
 	i = len(sortedNums) - 1
-	for node := rbt.orderedTail; node != nil; node = node.orderedPrev {
-		if sortedNums[i] != node.v.(int) {
-			t.Errorf("%s. Reverse ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], node.v.(int))
+	for it := rbt.ReverseIterator(); it.IsValid(); it.Next() {
+		if sortedNums[i] != it.Value().(int) {
+			t.Errorf("%s. Reverse ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value().(int))
 			return false
 		}
 		i--
