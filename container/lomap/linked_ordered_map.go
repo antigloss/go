@@ -276,12 +276,12 @@ func (m *LinkedOrderedMap) Size() int {
 
 // Iterator returns an iterator for iterating the LinkedOrderedMap.
 func (m *LinkedOrderedMap) Iterator() container.MapIterator {
-	return &iterator{m.orderedHead}
+	return &Iterator{m.orderedHead}
 }
 
 // ReverseIterator returns an iterator for iterating the LinkedOrderedMap in reverse order.
 func (m *LinkedOrderedMap) ReverseIterator() container.MapIterator {
-	return &reverseIterator{m.orderedTail}
+	return &ReverseIterator{m.orderedTail}
 }
 
 // TODO how to support Clone()?
@@ -496,54 +496,54 @@ func (m *LinkedOrderedMap) replaceNode(oldNode *lrbtNode, newNode *lrbtNode) {
 }
 
 // iterator is used for iterating the LinkedOrderedMap.
-type iterator struct {
+type Iterator struct {
 	node *lrbtNode
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false.
-func (it *iterator) IsValid() bool {
+func (it *Iterator) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map
-func (it *iterator) Next() {
+func (it *Iterator) Next() {
 	it.node = it.node.orderedNext
 }
 
 // Key returns the key of the underlying element
-func (it *iterator) Key() interface{} {
+func (it *Iterator) Key() interface{} {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *iterator) Value() interface{} {
+func (it *Iterator) Value() interface{} {
 	return it.node.v
 }
 
 // reverseIterator is used for iterating the LinkedOrderedMap in reverse order.
-type reverseIterator struct {
+type ReverseIterator struct {
 	node *lrbtNode
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false. 
-func (it *reverseIterator) IsValid() bool {
+func (it *ReverseIterator) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map in reverse order
-func (it *reverseIterator) Next() {
+func (it *ReverseIterator) Next() {
 	it.node = it.node.orderedPrev
 }
 
 // Key returns the key of the underlying element
-func (it *reverseIterator) Key() interface{} {
+func (it *ReverseIterator) Key() interface{} {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *reverseIterator) Value() interface{} {
+func (it *ReverseIterator) Value() interface{} {
 	return it.node.v
 }
 
