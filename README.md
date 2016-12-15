@@ -23,3 +23,7 @@ Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(
 Package mux (short for connection multiplexer) is a multiplexing package for Golang.
 
 In some rare cases, we can only open a few connections to a remote server, but we want to program like we can open unlimited connections. Should you encounter this rare cases, then this package is exactly what you need.
+
+# utils
+
+Package utils packs with many useful handy utilities.
