@@ -170,18 +170,18 @@ func verifyData(msg string, rbt *LinkedOrderedMap, m map[int]int) bool {
 
 func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntSlice) bool {
 	i := 0
-	for node := rbt.head; node != nil; node = node.next {
-		if insertedNums[i] != node.v.(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], node.v.(int))
+	for it := rbt.LinkedIterator(); it.IsValid(); it.Next() {
+		if insertedNums[i] != it.Value().(int) {
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], it.Value().(int))
 			return false
 		}
 		i++
 	}
 
 	i = len(insertedNums) - 1
-	for node := rbt.tail; node != nil; node = node.prev {
-		if insertedNums[i] != node.v.(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], node.v.(int))
+	for it := rbt.ReverseLinkedIterator(); it.IsValid(); it.Next() {
+		if insertedNums[i] != it.Value().(int) {
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], it.Value().(int))
 			return false
 		}
 		i--

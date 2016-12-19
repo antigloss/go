@@ -6,10 +6,6 @@
 // Caution: This package is not goroutine-safe!
 package lomap
 
-import (
-	"github.com/antigloss/go/container"
-)
-
 // Comparator compares a and b and returns:
 //     0 if they are equal
 //     < 0 if a < b
@@ -275,13 +271,23 @@ func (m *LinkedOrderedMap) Size() int {
 }
 
 // Iterator returns an iterator for iterating the LinkedOrderedMap.
-func (m *LinkedOrderedMap) Iterator() container.MapIterator {
+func (m *LinkedOrderedMap) Iterator() *Iterator {
 	return &Iterator{m.orderedHead}
 }
 
 // ReverseIterator returns an iterator for iterating the LinkedOrderedMap in reverse order.
-func (m *LinkedOrderedMap) ReverseIterator() container.MapIterator {
+func (m *LinkedOrderedMap) ReverseIterator() *ReverseIterator {
 	return &ReverseIterator{m.orderedTail}
+}
+
+// LinkedIterator returns an iterator for iterating the LinkedOrderedMap in insertion order.
+func (m *LinkedOrderedMap) LinkedIterator() *LinkedIterator {
+	return &LinkedIterator{m.head}
+}
+
+// ReverseLinkedIterator returns an iterator for iterating the LinkedOrderedMap in reverse insertion order.
+func (m *LinkedOrderedMap) ReverseLinkedIterator() *ReverseLinkedIterator {
+	return &ReverseLinkedIterator{m.tail}
 }
 
 // TODO how to support Clone()?
@@ -495,7 +501,7 @@ func (m *LinkedOrderedMap) replaceNode(oldNode *lrbtNode, newNode *lrbtNode) {
 	}
 }
 
-// iterator is used for iterating the LinkedOrderedMap.
+// Iterator is used for iterating the LinkedOrderedMap.
 type Iterator struct {
 	node *lrbtNode
 }
@@ -521,7 +527,7 @@ func (it *Iterator) Value() interface{} {
 	return it.node.v
 }
 
-// reverseIterator is used for iterating the LinkedOrderedMap in reverse order.
+// ReverseIterator is used for iterating the LinkedOrderedMap in reverse order.
 type ReverseIterator struct {
 	node *lrbtNode
 }
@@ -544,6 +550,58 @@ func (it *ReverseIterator) Key() interface{} {
 
 // Value returns the value of the underlying element
 func (it *ReverseIterator) Value() interface{} {
+	return it.node.v
+}
+
+// LinkedIterator is used for iterating the LinkedOrderedMap in insertion order.
+type LinkedIterator struct {
+	node *lrbtNode
+}
+
+// IsValid returns true if the iterator is valid for use, false otherwise.
+// We must not call Next, Key, or Value if IsValid returns false.
+func (it *LinkedIterator) IsValid() bool {
+	return it.node != nil
+}
+
+// Next advances the iterator to the next element of the map in insertion order
+func (it *LinkedIterator) Next() {
+	it.node = it.node.next
+}
+
+// Key returns the key of the underlying element
+func (it *LinkedIterator) Key() interface{} {
+	return it.node.k
+}
+
+// Value returns the value of the underlying element
+func (it *LinkedIterator) Value() interface{} {
+	return it.node.v
+}
+
+// ReverseLinkedIterator is used for iterating the LinkedOrderedMap in reverse insertion order.
+type ReverseLinkedIterator struct {
+	node *lrbtNode
+}
+
+// IsValid returns true if the iterator is valid for use, false otherwise.
+// We must not call Next, Key, or Value if IsValid returns false. 
+func (it *ReverseLinkedIterator) IsValid() bool {
+	return it.node != nil
+}
+
+// Next advances the iterator to the next element of the map in reverse insertion order
+func (it *ReverseLinkedIterator) Next() {
+	it.node = it.node.prev
+}
+
+// Key returns the key of the underlying element
+func (it *ReverseLinkedIterator) Key() interface{} {
+	return it.node.k
+}
+
+// Value returns the value of the underlying element
+func (it *ReverseLinkedIterator) Value() interface{} {
 	return it.node.v
 }
 
