@@ -35,92 +35,23 @@ func New(comparator Comparator) *LinkedOrderedMap {
 	return &LinkedOrderedMap{comp: comparator}
 }
 
-// Set inserts a new node into the LinkedOrderedMap or updates the existing node with the new value.
+// Insert inserts a new element into the LinkedOrderedMap if it doesn't already contain an element with an equivalent key.
+// Nothing will be changed if the LinkedOrderedMap already contains an element with an equivalent key.
+// Key should adhere to the comparator's type assertion, otherwise it will panic.
+//   key: key of the value to be inserted
+//   value: value to be inserted
+// Return value: true if the insertion took place and false otherwise.
+func (m *LinkedOrderedMap) Insert(key, value interface{}) bool {
+	return m.set(key, value, false)
+}
+
+// Set inserts a new element into the LinkedOrderedMap or updates the existing element with the new value.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
 //   key: key of the value to be inserted/updated
 //   value: value to be inserted/updated
-func (m *LinkedOrderedMap) Set(key interface{}, value interface{}) {
-	newNode := &lrbtNode{k: key, v: value}
-	if m.root != nil {
-		node := m.root
-		for {
-			ret := m.comp(key, node.k)
-			if ret > 0 { // k is bigger than the node.k, go right.
-				if node.right != nil {
-					node = node.right
-				} else {
-					node.right = newNode
-					newNode.nodeType = kLRBTNodeTypeRightChild
-					break
-				}
-			} else if ret < 0 { // k is smaller than the node.k, go left.
-				if node.left != nil {
-					node = node.left
-				} else {
-					node.left = newNode
-					newNode.nodeType = kLRBTNodeTypeLeftChild
-					break
-				}
-			} else { // k already exists, updates the value.
-				node.k = key
-				node.v = value
-				return
-			}
-		}
-		newNode.parent = node
-		m.insertCase2(newNode)
-		// insert ordered linked list
-		newNode.prev = m.tail
-		m.tail.next = newNode
-		m.tail = newNode
-		// ordered linked list
-		if newNode.isLeftChild() {
-			var nextNode *lrbtNode
-			if newNode.right == nil {
-				nextNode = newNode.parent
-			} else {
-				nextNode = newNode.right.leftmostChild()
-			}
-			newNode.orderedPrev = nextNode.orderedPrev
-			newNode.orderedNext = nextNode
-			nextNode.orderedPrev = newNode
-			if newNode.orderedPrev != nil {
-				newNode.orderedPrev.orderedNext = newNode
-			} else {
-				m.orderedHead = newNode
-			}
-		} else if newNode.isRightChild() {
-			var prevNode *lrbtNode
-			if newNode.left == nil {
-				prevNode = newNode.parent
-			} else {
-				prevNode = newNode.left.rightmostChild()
-			}
-			newNode.orderedPrev = prevNode
-			newNode.orderedNext = prevNode.orderedNext
-			prevNode.orderedNext = newNode
-			if newNode.orderedNext != nil {
-				newNode.orderedNext.orderedPrev = newNode
-			} else {
-				m.orderedTail = newNode
-			}
-		} else {
-			newNode.orderedPrev = newNode.left
-			newNode.orderedNext = newNode.right
-			newNode.left.orderedNext = newNode
-			newNode.right.orderedPrev = newNode
-		}
-	} else {
-		m.root = newNode
-		m.head = newNode
-		m.tail = newNode
-		m.orderedHead = newNode
-		m.orderedTail = newNode
-		newNode.isBlack = true
-		newNode.nodeType = kLRBTNodeTypeRoot
-	}
-
-	m.size++
+// Return value: true if the insertion took place and false if the update took place.
+func (m *LinkedOrderedMap) Set(key, value interface{}) bool {
+	return m.set(key, value, true)
 }
 
 // Get returns value of the key and true if the given key is found.
@@ -134,9 +65,9 @@ func (m *LinkedOrderedMap) Get(key interface{}) ( /*value*/ interface{} /*found*
 	return nil, false
 }
 
-// Remove removes the node with the given key from the map.
+// Erase removes the element with the given key from the map.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-func (m *LinkedOrderedMap) Remove(key interface{}) {
+func (m *LinkedOrderedMap) Erase(key interface{}) {
 	node := m.search(key)
 	if node == nil {
 		return
@@ -310,6 +241,94 @@ func (m *LinkedOrderedMap) Count(key interface{}) int {
 		return 1
 	}
 	return 0
+}
+
+// set inserts a new node into the LinkedOrderedMap or updates the existing node with the new value.
+func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool {
+	newNode := &lrbtNode{k: key, v: value}
+	if m.root != nil {
+		node := m.root
+		for {
+			ret := m.comp(key, node.k)
+			if ret > 0 { // k is bigger than the node.k, go right.
+				if node.right != nil {
+					node = node.right
+				} else {
+					node.right = newNode
+					newNode.nodeType = kLRBTNodeTypeRightChild
+					break
+				}
+			} else if ret < 0 { // k is smaller than the node.k, go left.
+				if node.left != nil {
+					node = node.left
+				} else {
+					node.left = newNode
+					newNode.nodeType = kLRBTNodeTypeLeftChild
+					break
+				}
+			} else { // k already exists, updates the value.
+				if updateIfExist {
+					node.k = key
+					node.v = value
+				}
+				return false
+			}
+		}
+		newNode.parent = node
+		m.insertCase2(newNode)
+		// insert ordered linked list
+		newNode.prev = m.tail
+		m.tail.next = newNode
+		m.tail = newNode
+		// ordered linked list
+		if newNode.isLeftChild() {
+			var nextNode *lrbtNode
+			if newNode.right == nil {
+				nextNode = newNode.parent
+			} else {
+				nextNode = newNode.right.leftmostChild()
+			}
+			newNode.orderedPrev = nextNode.orderedPrev
+			newNode.orderedNext = nextNode
+			nextNode.orderedPrev = newNode
+			if newNode.orderedPrev != nil {
+				newNode.orderedPrev.orderedNext = newNode
+			} else {
+				m.orderedHead = newNode
+			}
+		} else if newNode.isRightChild() {
+			var prevNode *lrbtNode
+			if newNode.left == nil {
+				prevNode = newNode.parent
+			} else {
+				prevNode = newNode.left.rightmostChild()
+			}
+			newNode.orderedPrev = prevNode
+			newNode.orderedNext = prevNode.orderedNext
+			prevNode.orderedNext = newNode
+			if newNode.orderedNext != nil {
+				newNode.orderedNext.orderedPrev = newNode
+			} else {
+				m.orderedTail = newNode
+			}
+		} else {
+			newNode.orderedPrev = newNode.left
+			newNode.orderedNext = newNode.right
+			newNode.left.orderedNext = newNode
+			newNode.right.orderedPrev = newNode
+		}
+	} else {
+		m.root = newNode
+		m.head = newNode
+		m.tail = newNode
+		m.orderedHead = newNode
+		m.orderedTail = newNode
+		newNode.isBlack = true
+		newNode.nodeType = kLRBTNodeTypeRoot
+	}
+
+	m.size++
+	return true
 }
 
 // Case 1: root node
@@ -533,7 +552,7 @@ type ReverseIterator struct {
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
-// We must not call Next, Key, or Value if IsValid returns false. 
+// We must not call Next, Key, or Value if IsValid returns false.
 func (it *ReverseIterator) IsValid() bool {
 	return it.node != nil
 }
@@ -585,7 +604,7 @@ type ReverseLinkedIterator struct {
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
-// We must not call Next, Key, or Value if IsValid returns false. 
+// We must not call Next, Key, or Value if IsValid returns false.
 func (it *ReverseLinkedIterator) IsValid() bool {
 	return it.node != nil
 }

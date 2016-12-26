@@ -14,7 +14,7 @@ const (
 var t *testing.T
 var nbs sort.IntSlice
 
-func TestLinkedRBTree(tt *testing.T) {
+func TestLinkedOrderedMap(tt *testing.T) {
 	t = tt
 	rand.Seed(time.Now().Unix())
 
@@ -123,7 +123,7 @@ func removeRandomly(rbt *LinkedOrderedMap, insertedNums, deletedNums sort.IntSli
 	// Remove every key twice to make sure no key will be removed mistakenly
 	for i := 0; i != 2; i++ {
 		for j := 0; j != deleteTimes; j++ {
-			rbt.Remove(deletedNums[j])
+			rbt.Erase(deletedNums[j])
 		}
 	}
 }
