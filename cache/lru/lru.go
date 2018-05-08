@@ -69,6 +69,22 @@ func (c *Cache) CurCachedSize() (size int64) {
 	return
 }
 
+// Remove removes a value from the cache.
+func (c *Cache) Remove(key interface{}) {
+	c.mtx.Lock()
+	c.c.Remove(key)
+	c.mtx.Unlock()
+}
+
+// RemoveCachedValues removes values specified in `keys` from the cache.
+func (c *Cache) RemoveCachedValues(keys []interface{}) {
+	c.mtx.Lock()
+	for _, key := range keys {
+		c.c.Remove(key)
+	}
+	c.mtx.Unlock()
+}
+
 // Clear purges all stored items from the cache.
 func (c *Cache) Clear() {
 	c.mtx.Lock()
