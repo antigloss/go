@@ -68,127 +68,7 @@ func (m *LinkedOrderedMap) Get(key interface{}) ( /*value*/ interface{} /*found*
 // Erase removes the element with the given key from the map.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
 func (m *LinkedOrderedMap) Erase(key interface{}) {
-	node := m.search(key)
-	if node == nil {
-		return
-	}
-
-	needFixList := true
-	// If both of the left and right child exist
-	if node.left != nil && node.right != nil {
-		predecessor := node.left.rightmostChild()
-		node.k = predecessor.k
-		node.v = predecessor.v
-
-		// Fix insert ordered linked list
-		if node.prev != nil && node.prev != predecessor && node.next != predecessor {
-			node.prev.next = node.next
-			if node.next == nil {
-				m.tail = node.prev
-			}
-		}
-		if node.next != nil && node.next != predecessor && node.prev != predecessor {
-			node.next.prev = node.prev
-			if node.prev == nil {
-				m.head = node.next
-			}
-		}
-		if predecessor.prev != node {
-			node.prev = predecessor.prev
-			if predecessor.prev != nil {
-				predecessor.prev.next = node
-			} else {
-				m.head = node
-			}
-		}
-		if predecessor.next != node {
-			node.next = predecessor.next
-			if predecessor.next != nil {
-				predecessor.next.prev = node
-			} else {
-				m.tail = node
-			}
-		}
-
-		// Fix ordered linked list
-		if node.orderedPrev != nil && node.orderedPrev != predecessor && node.orderedNext != predecessor {
-			node.orderedPrev.orderedNext = node.orderedNext
-			if node.orderedNext == nil {
-				m.orderedTail = node.orderedPrev
-			}
-		}
-		if node.orderedNext != nil && node.orderedNext != predecessor && node.orderedPrev != predecessor {
-			node.orderedNext.orderedPrev = node.orderedPrev
-			if node.orderedPrev == nil {
-				m.orderedHead = node.orderedNext
-			}
-		}
-		if predecessor.orderedPrev != node {
-			node.orderedPrev = predecessor.orderedPrev
-			if predecessor.orderedPrev != nil {
-				predecessor.orderedPrev.orderedNext = node
-			} else {
-				m.orderedHead = node
-			}
-		}
-		if predecessor.orderedNext != node {
-			node.orderedNext = predecessor.orderedNext
-			if predecessor.orderedNext != nil {
-				predecessor.orderedNext.orderedPrev = node
-			} else {
-				m.orderedTail = node
-			}
-		}
-
-		//  Now the node to be deleted becomes the predecessor
-		node = predecessor
-		needFixList = false
-	}
-
-	// At this point, it's certain that node has at most one children
-	var child *lrbtNode
-	if node.right == nil {
-		child = node.left
-	} else {
-		child = node.right
-	}
-	if node.isBlack {
-		node.isBlack = child.isBlackNode()
-		m.deleteCase1(node)
-	}
-	m.replaceNode(node, child)
-	// If the node that was deleted is a root node
-	if node.parent == nil && child != nil {
-		child.isBlack = true
-	}
-
-	if needFixList {
-		// Fix insert ordered linked list
-		if node.prev != nil {
-			node.prev.next = node.next
-		} else {
-			m.head = node.next
-		}
-		if node.next != nil {
-			node.next.prev = node.prev
-		} else {
-			m.tail = node.prev
-		}
-
-		// Fix ordered linked list
-		if node.orderedPrev != nil {
-			node.orderedPrev.orderedNext = node.orderedNext
-		} else {
-			m.orderedHead = node.orderedNext
-		}
-		if node.orderedNext != nil {
-			node.orderedNext.orderedPrev = node.orderedPrev
-		} else {
-			m.orderedTail = node.orderedPrev
-		}
-	}
-
-	m.size--
+	m.erase(m.search(key))
 }
 
 // Empty returns true if the map does not contain any element, otherwise it returns false.
@@ -214,6 +94,46 @@ func (m *LinkedOrderedMap) ReverseIterator() *ReverseIterator {
 // LinkedIterator returns an iterator for iterating the LinkedOrderedMap in insertion order.
 func (m *LinkedOrderedMap) LinkedIterator() *LinkedIterator {
 	return &LinkedIterator{m.head}
+}
+
+// FindLinkedIterator returns a LinkedIterator to the `key`, or nil if not found.
+// Key should adhere to the comparator's type assertion, otherwise it will panic.
+func (m *LinkedOrderedMap) FindLinkedIterator(key interface{}) *LinkedIterator {
+	node := m.search(key)
+	if node != nil {
+		return &LinkedIterator{node}
+	}
+	return nil
+}
+
+// MoveToBack move the element specified by `iter` to the back of the linked list as if it is just inserted.
+func (m *LinkedOrderedMap) MoveToBack(iter *LinkedIterator) {
+	node := iter.node
+	if node == nil || node.next == nil { // node is nil or the last node
+		return
+	}
+
+	if node.prev != nil {
+		node.prev.next = node.next
+	} else {
+		m.head = node.next
+	}
+	node.next.prev = node.prev
+	node.prev = m.tail
+	node.next = nil
+	m.tail.next = node
+	m.tail = node
+}
+
+// EraseByLinkedIterator erases the element specified by `iter`
+func (m *LinkedOrderedMap) EraseByLinkedIterator(iter *LinkedIterator) {
+	m.erase(iter.node)
+	iter.node = nil
+}
+
+// EraseFront erases the front element
+func (m *LinkedOrderedMap) EraseFront() {
+	m.erase(m.head)
 }
 
 // ReverseLinkedIterator returns an iterator for iterating the LinkedOrderedMap in reverse insertion order.
@@ -518,6 +438,129 @@ func (m *LinkedOrderedMap) replaceNode(oldNode *lrbtNode, newNode *lrbtNode) {
 	if newNode != nil {
 		newNode.parent = oldNode.parent
 	}
+}
+
+func (m *LinkedOrderedMap) erase(node *lrbtNode) {
+	if node == nil {
+		return
+	}
+
+	needFixList := true
+	// If both of the left and right child exist
+	if node.left != nil && node.right != nil {
+		predecessor := node.left.rightmostChild()
+		node.k = predecessor.k
+		node.v = predecessor.v
+
+		// Fix insert ordered linked list
+		if node.prev != nil && node.prev != predecessor && node.next != predecessor {
+			node.prev.next = node.next
+			if node.next == nil {
+				m.tail = node.prev
+			}
+		}
+		if node.next != nil && node.next != predecessor && node.prev != predecessor {
+			node.next.prev = node.prev
+			if node.prev == nil {
+				m.head = node.next
+			}
+		}
+		if predecessor.prev != node {
+			node.prev = predecessor.prev
+			if predecessor.prev != nil {
+				predecessor.prev.next = node
+			} else {
+				m.head = node
+			}
+		}
+		if predecessor.next != node {
+			node.next = predecessor.next
+			if predecessor.next != nil {
+				predecessor.next.prev = node
+			} else {
+				m.tail = node
+			}
+		}
+
+		// Fix ordered linked list
+		if node.orderedPrev != nil && node.orderedPrev != predecessor && node.orderedNext != predecessor {
+			node.orderedPrev.orderedNext = node.orderedNext
+			if node.orderedNext == nil {
+				m.orderedTail = node.orderedPrev
+			}
+		}
+		if node.orderedNext != nil && node.orderedNext != predecessor && node.orderedPrev != predecessor {
+			node.orderedNext.orderedPrev = node.orderedPrev
+			if node.orderedPrev == nil {
+				m.orderedHead = node.orderedNext
+			}
+		}
+		if predecessor.orderedPrev != node {
+			node.orderedPrev = predecessor.orderedPrev
+			if predecessor.orderedPrev != nil {
+				predecessor.orderedPrev.orderedNext = node
+			} else {
+				m.orderedHead = node
+			}
+		}
+		if predecessor.orderedNext != node {
+			node.orderedNext = predecessor.orderedNext
+			if predecessor.orderedNext != nil {
+				predecessor.orderedNext.orderedPrev = node
+			} else {
+				m.orderedTail = node
+			}
+		}
+
+		//  Now the node to be deleted becomes the predecessor
+		node = predecessor
+		needFixList = false
+	}
+
+	// At this point, it's certain that node has at most one children
+	var child *lrbtNode
+	if node.right == nil {
+		child = node.left
+	} else {
+		child = node.right
+	}
+	if node.isBlack {
+		node.isBlack = child.isBlackNode()
+		m.deleteCase1(node)
+	}
+	m.replaceNode(node, child)
+	// If the node that was deleted is a root node
+	if node.parent == nil && child != nil {
+		child.isBlack = true
+	}
+
+	if needFixList {
+		// Fix insert ordered linked list
+		if node.prev != nil {
+			node.prev.next = node.next
+		} else {
+			m.head = node.next
+		}
+		if node.next != nil {
+			node.next.prev = node.prev
+		} else {
+			m.tail = node.prev
+		}
+
+		// Fix ordered linked list
+		if node.orderedPrev != nil {
+			node.orderedPrev.orderedNext = node.orderedNext
+		} else {
+			m.orderedHead = node.orderedNext
+		}
+		if node.orderedNext != nil {
+			node.orderedNext.orderedPrev = node.orderedPrev
+		} else {
+			m.orderedTail = node.orderedPrev
+		}
+	}
+
+	m.size--
 }
 
 // Iterator is used for iterating the LinkedOrderedMap.
