@@ -96,14 +96,11 @@ func (m *LinkedOrderedMap) LinkedIterator() *LinkedIterator {
 	return &LinkedIterator{m.head}
 }
 
-// FindLinkedIterator returns a LinkedIterator to the `key`, or nil if not found.
+// FindLinkedIterator returns a LinkedIterator to the `key`.
+// If found, LinkedIterator.IsValid() returns true, otherwise it returns false.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
 func (m *LinkedOrderedMap) FindLinkedIterator(key interface{}) *LinkedIterator {
-	node := m.search(key)
-	if node != nil {
-		return &LinkedIterator{node}
-	}
-	return nil
+	return &LinkedIterator{m.search(key)}
 }
 
 // MoveToBack move the element specified by `iter` to the back of the linked list as if it is just inserted.
