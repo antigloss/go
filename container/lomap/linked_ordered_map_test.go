@@ -172,7 +172,7 @@ func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 	i := 0
 	for it := rbt.LinkedIterator(); it.IsValid(); it.Next() {
 		if insertedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], it.Value().(int))
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value().(int))
 			return false
 		}
 		i++
@@ -181,7 +181,7 @@ func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 	i = len(insertedNums) - 1
 	for it := rbt.ReverseLinkedIterator(); it.IsValid(); it.Next() {
 		if insertedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", insertedNums[i], it.Value().(int))
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value().(int))
 			return false
 		}
 		i--
