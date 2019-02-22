@@ -1,4 +1,4 @@
-package cocurrent
+package concurrent
 
 import (
 	"sync"
