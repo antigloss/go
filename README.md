@@ -4,7 +4,7 @@ Handy utilities written in golang
 
 # cache
 
-TODO test2
+Implements an LRU cache.
 
 # iap
 
