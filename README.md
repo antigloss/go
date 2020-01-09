@@ -4,7 +4,7 @@ Handy utilities written in golang
 
 # cache
 
-TODO
+TODO test
 
 # iap
 
