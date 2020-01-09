@@ -8,7 +8,15 @@ Implements an LRU cache.
 
 # concurrent
 
-Package concurrent provides some concurrent control utilities.
+Package concurrent provides some concurrent control utilities and goroutine-safe containers.
+
+# container/lomap
+
+Package lomap implements an linked ordered map which supports iteration in insertion order.
+
+# container/queue
+
+Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
 
 # iap
 
@@ -21,14 +29,6 @@ Package logger is a go logging facility which provides functions Trace, Info, Wa
 # pool
 
 Package pool offers goroutine-safe object pools such as ObjectPool and BufferPool.
-
-# container/lomap
-
-Package lomap implements an linked ordered map which supports iteration in insertion order.
-
-# container/queue
-
-Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
 
 # inet/mux
 
