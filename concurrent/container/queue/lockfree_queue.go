@@ -8,6 +8,14 @@ import (
 	"unsafe"
 )
 
+// LockfreeQueue is a goroutine-safe Queue implementation.
+// The overall performance of LockfreeQueue is much better than List+Mutex(standard package).
+type LockfreeQueue struct {
+	head  unsafe.Pointer
+	tail  unsafe.Pointer
+	dummy lfqNode
+}
+
 // NewLockfreeQueue is the only way to get a new, ready-to-use LockfreeQueue.
 //
 // Example:
@@ -20,14 +28,6 @@ func NewLockfreeQueue() *LockfreeQueue {
 	lfq.head = unsafe.Pointer(&lfq.dummy)
 	lfq.tail = lfq.head
 	return &lfq
-}
-
-// LockfreeQueue is a goroutine-safe Queue implementation.
-// The overall performance of LockfreeQueue is much better than List+Mutex(standard package).
-type LockfreeQueue struct {
-	head  unsafe.Pointer
-	tail  unsafe.Pointer
-	dummy lfqNode
 }
 
 // Pop returns (and removes) an element from the front of the queue, or nil if the queue is empty.

@@ -1,9 +1,8 @@
-concurrent
-======
+# Overview
 
-Package concurrent provides some concurrent control utilities.
+Package concurrent provides some concurrent control utilities and goroutine-safe containers.
 
-# Semaphore
+## Semaphore
 
 ### Usage
 

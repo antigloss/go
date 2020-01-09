@@ -1,7 +1,5 @@
 # Overview
 
-First of all, sorry for my poor English, I've tried my best.
-
 Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
 
 # LockfreeQueue
