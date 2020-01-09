@@ -1,3 +1,4 @@
+// Package ftp_pool implements a ftp pool base on "github.com/jlaffaye/ftp"
 package ftp_pool
 
 import (
@@ -8,6 +9,33 @@ import (
 	"github.com/jlaffaye/ftp"
 )
 
+// FTPPool is an ftp pool.
+type FTPPool struct {
+	cond       *sync.Cond
+	freeList   list.List
+	curConnNum int // Current ftp connection number
+	waitingNum int // Number of goroutines waiting for ftp connection currently
+	// readonly variables
+	maxCachedNum int    // Max pooled ftp connections
+	connLimit    int    // Max ftp connections
+	addr         string // ftp address
+	user         string // ftp username
+	passwd       string // ftp password
+}
+
+// NewFTPPool is the only way to get a new, ready-to-use FTPPool object.
+//
+//   addr: ftp address
+//   user: ftp username
+//   passwd: ftp password
+//   maxCachedConn: Max pooled ftp connections
+//   connLimit: Max ftp connections
+//
+// Example:
+//
+//	 ftpPool := NewFTPPool(Addr, User, Passwd, 10, 100)
+//   ftpConn, _ := ftpPool.Get() // Gets an ftp connection from the pool, or creates a new one if the pool is empty
+//   ftpPool.Put(ftpConn, false) // Puts an ftp connection back to the pool
 func NewFTPPool(addr, user, passwd string, maxCachedConn, connLimit int) *FTPPool {
 	pool := &FTPPool{
 		cond:         sync.NewCond(new(sync.Mutex)),
@@ -23,31 +51,20 @@ func NewFTPPool(addr, user, passwd string, maxCachedConn, connLimit int) *FTPPoo
 	return pool
 }
 
-type FTPPool struct {
-	cond       *sync.Cond
-	freeList   list.List
-	curConnNum int // 当前FTP连接数
-	waitingNum int // 当前正在等待FTP连接的goroutine数量
-	// readonly variables
-	maxCachedNum int // 最大缓存FTP连接数
-	connLimit    int // 最大FTP连接数
-	addr         string
-	user         string
-	passwd       string
-}
-
+// Get gets an ftp connection from the pool. If no free connection is available and MaxConnLimit not reached,
+// a new connection will be created. If MaxConnLimit is reached, Get blocks waiting to get/create a connection.
 func (pool *FTPPool) Get() (conn *ftp.ServerConn, err error) {
 	pool.cond.L.Lock()
 	for {
 		elem := pool.freeList.Front()
-		if elem != nil { // 有可用的连接，直接使用
+		if elem != nil { // Get a connection from the pool
 			conn = elem.Value.(*ftpConnNode).conn
 			pool.freeList.Remove(elem)
 			break
-		} else if pool.curConnNum < pool.connLimit { // 还能建立多余的连接
-			pool.curConnNum++ // 先把当前连接数加1，如何后面连接建立不成功，再减1
+		} else if pool.curConnNum < pool.connLimit { // Can still create more connection
+			pool.curConnNum++ // Increase it anyway and decrease it later
 			break
-		} else { // 无法建立更多连接，等待有空闲连接后重试
+		} else { // waiting for permission to get/create a connection
 			pool.waitingNum++
 			pool.cond.Wait()
 			pool.waitingNum--
@@ -59,7 +76,7 @@ func (pool *FTPPool) Get() (conn *ftp.ServerConn, err error) {
 		return
 	}
 
-	for i := 0; i < 2; i++ { // 如果连不上FTP，则尝试重连一次
+	for i := 0; i < 2; i++ { // Try again one more time if failed
 		conn, err = ftp.DialTimeout(pool.addr, 5*time.Second)
 		if err != nil {
 			time.Sleep(5 * time.Second)
@@ -76,7 +93,7 @@ func (pool *FTPPool) Get() (conn *ftp.ServerConn, err error) {
 	}
 	if conn == nil {
 		pool.cond.L.Lock()
-		pool.curConnNum-- // 新建连接失败，把当前连接数减1
+		pool.curConnNum--
 		if pool.waitingNum > 0 {
 			pool.cond.Signal()
 		}
@@ -86,6 +103,10 @@ func (pool *FTPPool) Get() (conn *ftp.ServerConn, err error) {
 	return
 }
 
+// Put returns an ftp connection to the pool. If MaxCachedConn had been reached, the connection will be discarded.
+//
+//   conn: ftp connection to be returned
+//   forceFree: the connection will be discarded anyway if true is passed
 func (pool *FTPPool) Put(conn *ftp.ServerConn, forceFree bool) {
 	pool.cond.L.Lock()
 	if !forceFree && pool.freeList.Len() < pool.maxCachedNum {
@@ -100,7 +121,7 @@ func (pool *FTPPool) Put(conn *ftp.ServerConn, forceFree bool) {
 	pool.cond.L.Unlock()
 
 	if forceFree {
-		conn.Quit() // Quit可能是比较耗时的操作，所以放到锁外面执行
+		conn.Quit()
 	}
 }
 
@@ -125,10 +146,10 @@ type ftpConnNode struct {
 	lastActTime time.Time
 }
 
-// 定期和FTP服务器心跳，避免被关闭
+// Keepalive with the ftp server
 func (pool *FTPPool) keepalive() {
 	for {
-		time.Sleep(5 * time.Second) // 每隔5秒扫描一次
+		time.Sleep(5 * time.Second)
 		tNow := time.Now()
 		pool.cond.L.Lock()
 		for nextElem := pool.freeList.Front(); nextElem != nil; {

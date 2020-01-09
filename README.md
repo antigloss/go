@@ -14,9 +14,17 @@ Package concurrent provides some concurrent control utilities and goroutine-safe
 
 Package container offers some goroutine-unsafe containers.
 
+# fileutils
+
+Package fileutils provides some handy file utilities.
+
 # iap
 
 A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
+
+# inet
+
+Package inet provides some handy utilities for network programming.
 
 # logger
 
