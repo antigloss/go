@@ -1,3 +1,6 @@
+// Author: https://github.com/antigloss
+
+// Package fileutils provides some handy file utilities.
 package fileutils
 
 import (
