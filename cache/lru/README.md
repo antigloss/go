@@ -1,4 +1,4 @@
-iap
+lru
 ======
 
 Package lru provides a goroutine safe LRU cache implementation based on "github.com/golang/groupcache/lru".

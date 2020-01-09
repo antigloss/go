@@ -6,6 +6,10 @@ Handy utilities written in golang
 
 Implements an LRU cache.
 
+# concurrent
+
+Package concurrent provides some concurrent control utilities.
+
 # iap
 
 A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
