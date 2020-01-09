@@ -10,13 +10,9 @@ Implements an LRU cache.
 
 Package concurrent provides some concurrent control utilities and goroutine-safe containers.
 
-# container/lomap
+# container
 
-Package lomap implements an linked ordered map which supports iteration in insertion order.
-
-# container/queue
-
-Package queue offers goroutine-safe Queue implementations such as LockfreeQueue(Lock free queue).
+Package container offers some goroutine-unsafe containers.
 
 # iap
 

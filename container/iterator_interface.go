@@ -1,3 +1,4 @@
+// Package container offers some goroutine-unsafe containers.
 package container
 
 // Iterator is an interface for iterators of any container type.
