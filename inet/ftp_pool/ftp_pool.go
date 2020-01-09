@@ -33,7 +33,7 @@ type FTPPool struct {
 //
 // Example:
 //
-//	 ftpPool := NewFTPPool(Addr, User, Passwd, 10, 100)
+//   ftpPool := NewFTPPool(Addr, User, Passwd, 10, 100)
 //   ftpConn, _ := ftpPool.Get() // Gets an ftp connection from the pool, or creates a new one if the pool is empty
 //   ftpPool.Put(ftpConn, false) // Puts an ftp connection back to the pool
 func NewFTPPool(addr, user, passwd string, maxCachedConn, connLimit int) *FTPPool {
