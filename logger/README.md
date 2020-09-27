@@ -1,7 +1,5 @@
 # Overview
 
-First of all, sorry for my poor English.
-
 Package logger is a logging facility which provides functions Trace, Info, Warn, Error, Panic and Abort to
 write logs with different severity levels. Logs with different severity levels are written to different logfiles.
 
