@@ -1,10 +1,8 @@
 // Author: https://github.com/antigloss
 
 /*
-Package logger is a logging facility which provides functions Trace, Info, Warn, Error, Panic and Abort to
+Package logger is a logging facility which provides functions Trace, Info, Warn, Error, Panic and Fatal to
 write logs with different severity levels. Logs with different severity levels are written to different logfiles.
-
-Sorry for my poor English, I've tried my best.
 
 Features:
 
@@ -102,398 +100,426 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// consts
-const (
-	kMaxInt64          = int64(^uint64(0) >> 1)
-	kLogCreatedTimeLen = 24
-	kLogFilenameMinLen = 29
-)
+type LogLevel int // LogLevel is used to exclude logs with lower level.
 
-// log level
 const (
 	kLogLevelTrace = iota
 	kLogLevelInfo
 	kLogLevelWarn
 	kLogLevelError
 	kLogLevelPanic
-	kLogLevelAbort
+	kLogLevelFatal
+	kLogLevelCount // Number of different log levels.
 
-	kLogLevelMax
+	LogLevelTrace LogLevel = kLogLevelTrace
+	LogLevelInfo           = kLogLevelInfo
+	LogLevelWarn           = kLogLevelWarn
+	LogLevelError          = kLogLevelError
+	LogLevelPanic          = kLogLevelPanic // Call panic() after log is written.
+	LogLevelFatal          = kLogLevelFatal // Call os.Exit(-1) after log is written.
 )
 
-// log flags
+type LogDest int // LogDest controls where the logs are written.
+
 const (
-	kFlagLogTrace = 1 << iota
-	kFlagLogThrough
-	kFlagLogFuncName
-	kFlagLogFilenameLineNum
-	kFlagLogToConsole
+	kLogDestFile = 1 << iota
+	kLogDestConsole
+	kLogDestNone = 0
+
+	LogDestNone    LogDest = kLogDestNone                   // Don't write logs.
+	LogDestFile            = kLogDestFile                   // Write logs to files.
+	LogDestConsole         = kLogDestConsole                // Write logs to console.
+	LogDestBoth            = kLogDestFile | kLogDestConsole // Write logs both to files and console.
 )
 
-// const strings
+type ControlFlag int // ControlFlag controls how the logs are written. Use `|`(Or operator) to mix multiple flags.
+
 const (
-	// Default filename prefix for logfiles
-	DefFilenamePrefix = "%P.%H.%U"
-	// Default filename prefix for symlinks to logfiles
-	DefSymlinkPrefix = "%P.%U"
-
-	kLogLevelChar = "TIWEPA"
+	ControlFlagLogThrough  ControlFlag = 1 << iota // Controls if logs with higher level are written to lower level log files.
+	ControlFlagLogFuncName                         // Controls if function name is prepended to the logs.
+	ControlFlagLogLineNum                          // Controls if filename and line number are prepended to the logs.
+	ControlFlagNone        = 0
 )
 
-// Init must be called first, otherwise this logger will not function properly!
+// Config contains options for creating a new Logger object.
+type Config struct {
+	// Directory to hold the log files. If left empty, current working directory is used.
+	// Should you need to create multiple Logger objects, better to associate them with different directories.
+	LogDir string
+	// Name of a log file is formatted as `LogFilenamePrefix.LogLevel.DateTime.log`.
+	// 3 placeholders are pre-defined: %P, %H and %U. When used in the prefix,
+	// %P will be replaced with the program's name, %H will be replaced with hostname,
+	// and %U will be replaced with username.
+	// If LogFilenamePrefix is left empty, it'll be defaulted to `%P.%H.%U`.
+	// If you create multiple Logger objects with the same directory, you must associate them with different prefixes.
+	LogFilenamePrefix string
+	// Latest log files of each level are associated with symbolic links. Name of a symlink is formatted as `LogSymlinkPrefix.LogLevel`.
+	// If LogSymlinkPrefix is left empty, it'll be defaulted to `%P.%U`.
+	// If you create multiple Logger objects with the same directory, you must associate them with different prefixes.
+	LogSymlinkPrefix string
+	// Limit the maximum size in MB for a single log file. 0 means unlimited.
+	LogFileMaxSize uint32
+	// Limit the maximum number of log files under `LogDir`. `LogFileNumToDel` log files will be deleted if reached. <=0 means unlimited.
+	LogFileMaxNum int
+	// Number of log files to be deleted when `LogFileMaxNum` reached. <=0 means don't delete.
+	LogFileNumToDel int
+	// Don't write logs below `LogLevel`.
+	LogLevel LogLevel
+	// Where the logs are written.
+	LogDest LogDest
+	// How the logs are written.
+	Flag ControlFlag
+}
+
+// Init is used to create the global Logger object with cfg. It must be called once and only once
+// before any other function backed by the global Logger object can be used.
 // It returns nil if all goes well, otherwise it returns the corresponding error.
-//   maxfiles: Must be greater than 0 and less than or equal to 100000.
-//   nfilesToDel: Number of files deleted when number of log files reaches `maxfiles`.
-//                Must be greater than 0 and less than or equal to `maxfiles`.
-//   maxsize: Maximum size of a log file in MB, 0 means unlimited.
-//   logTrace: If set to false, `logger.Trace("xxxx")` will be mute.
-func Init(logpath string, maxfiles, nfilesToDel int, maxsize uint32, logTrace bool) error {
-	err := os.MkdirAll(logpath, 0755)
-	if err != nil {
-		return err
+func Init(cfg *Config) (err error) {
+	defLoggerLock.Lock()
+	defer defLoggerLock.Unlock()
+
+	if defLogger == nil {
+		defLogger, err = New(cfg)
 	}
-
-	if maxfiles <= 0 || maxfiles > 100000 {
-		return fmt.Errorf("maxfiles must be greater than 0 and less than or equal to 100000: %d", maxfiles)
-	}
-
-	if nfilesToDel <= 0 || nfilesToDel > maxfiles {
-		return fmt.Errorf("nfilesToDel must be greater than 0 and less than or equal to maxfiles! toDel=%d maxfiles=%d",
-			nfilesToDel, maxfiles)
-	}
-
-	gConf.logPath = logpath + "/"
-	gConf.setFlags(kFlagLogTrace, logTrace)
-	gConf.maxfiles = maxfiles
-	gConf.nfilesToDel = nfilesToDel
-	gConf.setMaxSize(maxsize)
-	return SetFilenamePrefix(DefFilenamePrefix, DefSymlinkPrefix)
+	return
 }
 
-// SetLogThrough sets whether to write log to all the logfiles with less severe log level.
-// By default, logthrough is turn on. You can turn it off for better performance.
-func SetLogThrough(on bool) {
-	gConf.setFlags(kFlagLogThrough, on)
+// SetLogLevel is used to tell the global Logger object created by Init not to write logs below logLevel.
+func SetLogLevel(logLevel LogLevel) {
+	defLogger.SetLogLevel(logLevel)
 }
 
-// SetLogFunctionName sets whether to log down the function name where the log takes place.
-// By default, function name is not logged down for better performance.
-func SetLogFunctionName(on bool) {
-	gConf.setFlags(kFlagLogFuncName, on)
+// Trace uses the global Logger object created by Init to write a log with trace level.
+func Trace(args ...interface{}) {
+	defLogger.log(kLogLevelTrace, args)
 }
 
-// SetLogFilenameLineNum sets whether to log down the filename and line number where the log takes place.
-// By default, filename and line number are logged down. You can turn it off for better performance.
-func SetLogFilenameLineNum(on bool) {
-	gConf.setFlags(kFlagLogFilenameLineNum, on)
+// Tracef uses the global Logger object created by Init to write a log with trace level.
+func Tracef(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelTrace, format, args)
 }
 
-// SetLogToConsole sets whether to output logs to the console.
-// By default, logs are not output to the console.
-func SetLogToConsole(on bool) {
-	gConf.setFlags(kFlagLogToConsole, on)
+// Info uses the global Logger object created by Init to write a log with info level.
+func Info(args ...interface{}) {
+	defLogger.log(kLogLevelInfo, args)
 }
 
-// SetFilenamePrefix sets filename prefix for the logfiles and symlinks of the logfiles.
-//
-// Filename format for logfiles is `PREFIX`.`SEVERITY_LEVEL`.`DATE_TIME`.log
-//
-// Filename format for symlinks is `PREFIX`.`SEVERITY_LEVEL`
-//
-// 3 kinds of placeholders can be used in the prefix: %P, %H and %U.
-//
-// %P means program name, %H means hostname, %U means username.
-//
-// The default prefix for a log filename is logger.DefFilenamePrefix ("%P.%H.%U").
-// The default prefix for a symlink is logger.DefSymlinkPrefix ("%P.%U").
-func SetFilenamePrefix(logfilenamePrefix, symlinkPrefix string) error {
-	gConf.setFilenamePrefix(logfilenamePrefix, symlinkPrefix)
-
-	files, err := getLogfilenames(gConf.logPath)
-	if err == nil {
-		gConf.curfiles = len(files)
-	}
-	return err
+// Infof uses the global Logger object created by Init to write a log with info level.
+func Infof(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelInfo, format, args)
 }
 
-// Trace logs down a log with trace level.
-// If parameter logTrace of logger.Init() is set to be false, no trace logs will be logged down.
-func Trace(format string, args ...interface{}) {
-	if gConf.logTrace() {
-		log(kLogLevelTrace, format, args)
-	}
+// Warn uses the global Logger object created by Init to write a log with warning level.
+func Warn(args ...interface{}) {
+	defLogger.log(kLogLevelWarn, args)
 }
 
-// Info logs down a log with info level.
-func Info(format string, args ...interface{}) {
-	log(kLogLevelInfo, format, args)
+// Warnf uses the global Logger object created by Init to write a log with warning level.
+func Warnf(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelWarn, format, args)
 }
 
-// Warn logs down a log with warning level.
-func Warn(format string, args ...interface{}) {
-	log(kLogLevelWarn, format, args)
+// Error uses the global Logger object created by Init to write a log with error level.
+func Error(args ...interface{}) {
+	defLogger.log(kLogLevelError, args)
 }
 
-// Error logs down a log with error level.
-func Error(format string, args ...interface{}) {
-	log(kLogLevelError, format, args)
+// Errorf uses the global Logger object created by Init to write a log with error level.
+func Errorf(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelError, format, args)
 }
 
-// Panic logs down a log with panic level and then panic("panic log") is called.
-func Panic(format string, args ...interface{}) {
-	log(kLogLevelPanic, format, args)
-	panic("panic log")
+// Panic uses the global Logger object created by Init to write a log with panic level followed by a call to panic("Panicf").
+func Panic(args ...interface{}) {
+	defLogger.log(kLogLevelPanic, args)
+	panic("Panic")
 }
 
-// Abort logs down a log with abort level and then os.Exit(-1) is called.
-func Abort(format string, args ...interface{}) {
-	log(kLogLevelAbort, format, args)
+// Panicf uses the global Logger object created by Init to write a log with panic level followed by a call to panic("Panicf").
+func Panicf(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelPanic, format, args)
+	panic("Panicf")
+}
+
+// Fatal uses the global Logger object created by Init to write a log with fatal level followed by a call to os.Exit(-1).
+func Fatal(args ...interface{}) {
+	defLogger.log(kLogLevelFatal, args)
 	os.Exit(-1)
 }
 
-// logger configuration
-type config struct {
-	logPath     string
-	pathPrefix  string
-	logflags    uint32
-	maxfiles    int   // limit the number of log files under `logPath`
-	curfiles    int   // number of files under `logPath` currently
-	nfilesToDel int   // number of files deleted when reaching the limit of the number of log files
-	maxsize     int64 // limit size of a log file
-	purgeLock   sync.Mutex
+// Fatalf uses the global Logger object created by Init to write a log with fatal level followed by a call to os.Exit(-1).
+func Fatalf(format string, args ...interface{}) {
+	defLogger.logf(kLogLevelFatal, format, args)
+	os.Exit(-1)
 }
 
-func (conf *config) setFlags(flag uint32, on bool) {
-	if on {
-		conf.logflags = conf.logflags | flag
-	} else {
-		conf.logflags = conf.logflags & ^flag
-	}
+// Logger can be used to write logs with different severity levels to files, console, or both.
+// Logs with different severity levels are written to different files. It is goroutine-safe and supports the following features:
+//
+//   1. Auto rotation: It'll create a new logfile whenever day changes or size of the current logfile exceeds the configured size limit.
+//   2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
+//   3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
+//   4. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
+//   5. It'll create symlinks that link to the most current logfiles.
+type Logger struct {
+	// Variables not allowed to be changed at runtime go here
+	logDir         string
+	logPathPrefix  string
+	logFileMaxSize int64
+	logFileMaxNum  int
+	logFilesToDel  int
+	flag           ControlFlag
+
+	// Variables allowed to be changed at runtime go here
+	logLevel int32
+	logDest  int32
+
+	// Variables used by the log-purging goroutine go here
+	logFileCurNum    int // number of log files under `logDir` currently
+	logFilenameRegex *regexp.Regexp
+	logFilePurgeCh   chan bool
+
+	// Logger implementation
+	bufPool bufferPool
+	loggers [kLogLevelCount]logger
 }
 
-func (conf *config) logTrace() bool {
-	return (conf.logflags & kFlagLogTrace) != 0
-}
-
-func (conf *config) logThrough() bool {
-	return (conf.logflags & kFlagLogThrough) != 0
-}
-
-func (conf *config) logFuncName() bool {
-	return (conf.logflags & kFlagLogFuncName) != 0
-}
-
-func (conf *config) logFilenameLineNum() bool {
-	return (conf.logflags & kFlagLogFilenameLineNum) != 0
-}
-
-func (conf *config) logToConsole() bool {
-	return (conf.logflags & kFlagLogToConsole) != 0
-}
-
-func (conf *config) setMaxSize(maxsize uint32) {
-	if maxsize > 0 {
-		conf.maxsize = int64(maxsize) * 1024 * 1024
-	} else {
-		conf.maxsize = kMaxInt64 - (1024 * 1024 * 1024 * 1024 * 1024)
-	}
-}
-
-func (conf *config) setFilenamePrefix(filenamePrefix, symlinkPrefix string) {
-	host, err := os.Hostname()
-	if err != nil {
-		host = "Unknown"
-	}
-
-	username := "Unknown"
-	curUser, err := user.Current()
-	if err == nil {
-		tmpUsername := strings.Split(curUser.Username, "\\") // for compatible with Windows
-		username = tmpUsername[len(tmpUsername)-1]
-	}
-
-	conf.pathPrefix = conf.logPath
-	if len(filenamePrefix) > 0 {
-		filenamePrefix = strings.Replace(filenamePrefix, "%P", gProgname, -1)
-		filenamePrefix = strings.Replace(filenamePrefix, "%H", host, -1)
-		filenamePrefix = strings.Replace(filenamePrefix, "%U", username, -1)
-		conf.pathPrefix = conf.pathPrefix + filenamePrefix + "."
-	}
-
-	if len(symlinkPrefix) > 0 {
-		symlinkPrefix = strings.Replace(symlinkPrefix, "%P", gProgname, -1)
-		symlinkPrefix = strings.Replace(symlinkPrefix, "%H", host, -1)
-		symlinkPrefix = strings.Replace(symlinkPrefix, "%U", username, -1)
-		symlinkPrefix += "."
-	}
-
-	isSymlink = map[string]bool{}
-	for i := 0; i != kLogLevelMax; i++ {
-		gLoggers[i].level = i
-		gSymlinks[i] = symlinkPrefix + gLogLevelNames[i]
-		isSymlink[gSymlinks[i]] = true
-		gFullSymlinks[i] = conf.logPath + gSymlinks[i]
-	}
-}
-
-// logger
-type logger struct {
-	file  *os.File
-	level int
-	day   int
-	size  int64
-	lock  sync.Mutex
-}
-
-func (l *logger) log(t time.Time, data []byte) {
-	y, m, d := t.Date()
-
-	l.lock.Lock()
-	defer l.lock.Unlock()
-	if l.size >= gConf.maxsize || l.day != d || l.file == nil {
-		hour, min, sec := t.Clock()
-
-		gConf.purgeLock.Lock()
-		hasLocked := true
-		defer func() {
-			if hasLocked {
-				gConf.purgeLock.Unlock()
-			}
-		}()
-		// reaches limit of number of log files
-		if gConf.curfiles >= gConf.maxfiles {
-			files, err := getLogfilenames(gConf.logPath)
-			if err != nil {
-				l.errlog(t, data, err)
-				return
-			}
-
-			gConf.curfiles = len(files)
-			if gConf.curfiles >= gConf.maxfiles {
-				sort.Sort(byCreatedTime(files))
-				nfiles := gConf.curfiles - gConf.maxfiles + gConf.nfilesToDel
-				if nfiles > gConf.curfiles {
-					nfiles = gConf.curfiles
-				}
-				for i := 0; i < nfiles; i++ {
-					err := os.RemoveAll(gConf.logPath + files[i])
-					if err == nil {
-						gConf.curfiles--
-					} else {
-						l.errlog(t, nil, err)
-					}
-				}
-			}
-		}
-
-		filename := fmt.Sprintf("%s%s.%d%02d%02d%02d%02d%02d%06d.log", gConf.pathPrefix, gLogLevelNames[l.level],
-			y, m, d, hour, min, sec, (t.Nanosecond() / 1000))
-		newfile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+// New can be used to create as many Logger objects as desired, while the global Logger object created by Init should be enough for most cases.
+// Should you need to create multiple Logger objects, better to associate them with different directories, at least with different filename prefixes(including symlink prefixes),
+// otherwise they will not work properly.
+func New(cfg *Config) (logger *Logger, err error) {
+	logDir := cfg.LogDir
+	if len(logDir) > 0 {
+		err = os.MkdirAll(logDir, 0755)
 		if err != nil {
-			l.errlog(t, data, err)
 			return
 		}
-		gConf.curfiles++
-		gConf.purgeLock.Unlock()
-		hasLocked = false
-
-		l.file.Close()
-		l.file = newfile
-		l.day = d
-		l.size = 0
-
-		err = os.RemoveAll(gFullSymlinks[l.level])
-		if err != nil {
-			l.errlog(t, nil, err)
-		}
-		err = os.Symlink(path.Base(filename), gFullSymlinks[l.level])
-		if err != nil {
-			l.errlog(t, nil, err)
-		}
-	}
-
-	n, _ := l.file.Write(data)
-	l.size += int64(n)
-}
-
-// (l *logger).errlog() should only be used within (l *logger).log()
-func (l *logger) errlog(t time.Time, originLog []byte, err error) {
-	buf := gBufPool.getBuffer()
-
-	genLogPrefix(buf, l.level, 2, t)
-	buf.WriteString(err.Error())
-	buf.WriteByte('\n')
-	if l.file != nil {
-		l.file.Write(buf.Bytes())
-		if len(originLog) > 0 {
-			l.file.Write(originLog)
+		if logDir[len(logDir)-1] != os.PathSeparator {
+			logDir += string(os.PathSeparator)
 		}
 	} else {
-		fmt.Fprint(os.Stderr, buf.String())
-		if len(originLog) > 0 {
-			fmt.Fprint(os.Stderr, string(originLog))
+		logDir, err = os.Getwd()
+		if err != nil {
+			return
+		}
+		logDir += string(os.PathSeparator)
+	}
+
+	logger = &Logger{
+		logDir:        logDir,
+		logFileMaxNum: cfg.LogFileMaxNum,
+		logFileCurNum: cfg.LogFileMaxNum, // Force to check if purging needed at startup
+		logFilesToDel: cfg.LogFileNumToDel,
+		logLevel:      int32(cfg.LogLevel),
+		logDest:       int32(cfg.LogDest),
+		flag:          cfg.Flag,
+	}
+
+	if cfg.LogFileMaxSize > 0 {
+		logger.logFileMaxSize = int64(cfg.LogFileMaxSize) * 1024 * 1024
+	} else {
+		logger.logFileMaxSize = kMaxInt64 - (1024 * 1024 * 1024 * 1024)
+	}
+
+	err = logger.initLoggerImpl(cfg.LogFilenamePrefix, cfg.LogSymlinkPrefix)
+	if err != nil {
+		logger = nil
+	}
+	return
+}
+
+// Close should be call once and only once to destroy the Logger object.
+func (l *Logger) Close() error {
+	atomic.StoreInt32(&l.logDest, kLogDestNone)
+	for i := kLogLevelTrace; i != kLogLevelCount; i++ {
+		l.loggers[i].close()
+	}
+	l.logFilePurgeCh <- false
+
+	return nil
+}
+
+// SetLogLevel tells the Logger object not to write logs below `logLevel`.
+func (l *Logger) SetLogLevel(logLevel LogLevel) {
+	atomic.StoreInt32(&l.logLevel, int32(logLevel))
+}
+
+// Trace writes a log with trace level.
+func (l *Logger) Trace(args ...interface{}) {
+	l.log(kLogLevelTrace, args)
+}
+
+// Tracef writes a log with trace level.
+func (l *Logger) Tracef(format string, args ...interface{}) {
+	l.logf(kLogLevelTrace, format, args)
+}
+
+// Info writes a log with info level.
+func (l *Logger) Info(args ...interface{}) {
+	l.log(kLogLevelInfo, args)
+}
+
+// Infof writes a log with info level.
+func (l *Logger) Infof(format string, args ...interface{}) {
+	l.logf(kLogLevelInfo, format, args)
+}
+
+// Warn writes a log with warning level.
+func (l *Logger) Warn(args ...interface{}) {
+	l.log(kLogLevelWarn, args)
+}
+
+// Warnf writes a log with warning level.
+func (l *Logger) Warnf(format string, args ...interface{}) {
+	l.logf(kLogLevelWarn, format, args)
+}
+
+// Error writes a log with error level.
+func (l *Logger) Error(args ...interface{}) {
+	l.log(kLogLevelError, args)
+}
+
+// Errorf writes a log with error level.
+func (l *Logger) Errorf(format string, args ...interface{}) {
+	l.logf(kLogLevelError, format, args)
+}
+
+// Panic writes a log with panic level followed by a call to panic("Panic").
+func (l *Logger) Panic(args ...interface{}) {
+	l.log(kLogLevelPanic, args)
+	panic("Panic")
+}
+
+// Panicf writes a log with panic level followed by a call to panic("Panicf").
+func (l *Logger) Panicf(format string, args ...interface{}) {
+	l.logf(kLogLevelPanic, format, args)
+	panic("Panicf")
+}
+
+// Fatal writes a log with fatal level followed by a call to os.Exit(-1).
+func (l *Logger) Fatal(args ...interface{}) {
+	l.log(kLogLevelFatal, args)
+	os.Exit(-1)
+}
+
+// Fatalf writes a log with fatal level followed by a call to os.Exit(-1).
+func (l *Logger) Fatalf(format string, args ...interface{}) {
+	l.logf(kLogLevelFatal, format, args)
+	os.Exit(-1)
+}
+
+func (l *Logger) initLoggerImpl(filenamePrefix, symlinkPrefix string) (err error) {
+	if len(filenamePrefix) == 0 {
+		filenamePrefix = "%P.%H.%U" // Default value
+	}
+	filenamePrefix = strings.Replace(filenamePrefix, "%P", kProgramName, -1)
+	filenamePrefix = strings.Replace(filenamePrefix, "%H", kHostname, -1)
+	filenamePrefix = strings.Replace(filenamePrefix, "%U", kUsername, -1)
+	l.logPathPrefix = l.logDir + filenamePrefix + "."
+
+	if len(symlinkPrefix) == 0 {
+		symlinkPrefix = "%P.%U" // Default value
+	}
+	symlinkPrefix = strings.Replace(symlinkPrefix, "%P", kProgramName, -1)
+	symlinkPrefix = strings.Replace(symlinkPrefix, "%H", kHostname, -1)
+	symlinkPrefix = strings.Replace(symlinkPrefix, "%U", kUsername, -1)
+	symlinkPrefix += "."
+
+	for i := int32(kLogLevelTrace); i != kLogLevelCount; i++ {
+		l.loggers[i].level = i
+		l.loggers[i].parent = l
+		l.loggers[i].symlinkFullPath = l.logDir + symlinkPrefix + kLogLevelNames[i]
+	}
+
+	if l.logFileMaxNum > 0 && l.logFilesToDel > 0 {
+		var sb strings.Builder
+		sb.WriteByte('^')
+		sb.WriteString(regexp.QuoteMeta(filenamePrefix))
+		sb.WriteString(`\.(`)
+		lastLevelNameIdx := len(kLogLevelNames) - 1
+		for i := 0; i < lastLevelNameIdx; i++ {
+			sb.WriteString(kLogLevelNames[i])
+			sb.WriteByte('|')
+		}
+		sb.WriteString(kLogLevelNames[lastLevelNameIdx])
+		sb.WriteString(`)\.\d{20}\.log$`)
+
+		l.logFilenameRegex, err = regexp.Compile(sb.String())
+		if err == nil {
+			l.logFilePurgeCh = make(chan bool, 4096)
+			go l.purgeLogFiles() // Purge old log files in another goroutine
 		}
 	}
 
-	gBufPool.putBuffer(buf)
+	return
 }
 
-// sort files by created time embedded in the filename
-type byCreatedTime []string
+func (l *Logger) purgeLogFiles() {
+	l.tryPurgeOldLogFiles()
 
-func (a byCreatedTime) Len() int {
-	return len(a)
-}
+	for r := range l.logFilePurgeCh {
+		if !r {
+			return
+		}
 
-func (a byCreatedTime) Less(i, j int) bool {
-	s1, s2 := a[i], a[j]
-	if len(s1) < kLogFilenameMinLen {
-		return true
-	} else if len(s2) < kLogFilenameMinLen {
-		return false
-	} else {
-		return s1[len(s1)-kLogCreatedTimeLen:] < s2[len(s2)-kLogCreatedTimeLen:]
+		l.logFileCurNum++
+		l.tryPurgeOldLogFiles()
 	}
 }
 
-func (a byCreatedTime) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
+func (l *Logger) tryPurgeOldLogFiles() {
+	if l.logFileCurNum < l.logFileMaxNum {
+		return
+	}
+
+	files, err := l.getLogFilenames()
+	if err != nil {
+		l.Errorf("Failed to purge old log files: %s", err)
+		return
+	}
+	l.logFileCurNum = len(files)
+
+	if l.logFileCurNum >= l.logFileMaxNum {
+		sort.Sort(byCreatedTime(files))
+		nFiles := l.logFileCurNum - l.logFileMaxNum + l.logFilesToDel
+		if nFiles > l.logFileCurNum {
+			nFiles = l.logFileCurNum
+		}
+		for i := 0; i < nFiles; i++ {
+			err := os.RemoveAll(l.logDir + files[i])
+			if err == nil {
+				l.logFileCurNum--
+			} else {
+				l.Errorf("RemoveAll failed: %v", err)
+			}
+		}
+	}
 }
 
-// init is called after all the variable declarations in the package have evaluated their initializers,
-// and those are evaluated only after all the imported packages have been initialized.
-// Besides initializations that cannot be expressed as declarations, a common use of init functions is to verify
-// or repair correctness of the program state before real execution begins.
-func init() {
-	tmpProgname := strings.Split(gProgname, "\\") // for compatible with `go run` under Windows
-	gProgname = tmpProgname[len(tmpProgname)-1]
-
-	gConf.setFilenamePrefix(DefFilenamePrefix, DefSymlinkPrefix)
-}
-
-// helpers
-func getLogfilenames(dir string) ([]string, error) {
+func (l *Logger) getLogFilenames() ([]string, error) {
 	var filenames []string
-	f, err := os.Open(dir)
+	f, err := os.Open(l.logDir)
 	if err == nil {
 		filenames, err = f.Readdirnames(0)
 		f.Close()
 		if err == nil {
-			nfiles := len(filenames)
-			for i := 0; i < nfiles; {
-				if isSymlink[filenames[i]] == false {
+			nFiles := len(filenames)
+			for i := 0; i < nFiles; {
+				if l.logFilenameRegex.MatchString(filenames[i]) {
 					i++
 				} else {
-					nfiles--
-					filenames[i] = filenames[nfiles]
-					filenames = filenames[:nfiles]
+					nFiles--
+					filenames[i] = filenames[nFiles]
+					filenames = filenames[:nFiles]
 				}
 			}
 		}
@@ -501,7 +527,66 @@ func getLogfilenames(dir string) ([]string, error) {
 	return filenames, err
 }
 
-func genLogPrefix(buf *buffer, logLevel, skip int, t time.Time) {
+func (l *Logger) log(logLevel int32, args []interface{}) {
+	lowestLogLevel := atomic.LoadInt32(&l.logLevel)
+	logDest := atomic.LoadInt32(&l.logDest)
+	if lowestLogLevel > logLevel || logDest == kLogDestNone {
+		return
+	}
+
+	buf := l.bufPool.getBuffer()
+
+	t := time.Now()
+	l.genLogPrefix(buf, logLevel, 3, t)
+	fmt.Fprintln(buf, args...)
+	output := buf.Bytes()
+	if logDest&kLogDestFile != kLogDestNone {
+		if l.flag&ControlFlagLogThrough != ControlFlagNone {
+			for i := logLevel; i >= lowestLogLevel; i-- {
+				l.loggers[i].log(t, output)
+			}
+		} else {
+			l.loggers[logLevel].log(t, output)
+		}
+	}
+	if logDest&kLogDestConsole != kLogDestNone {
+		os.Stdout.Write(output) // TODO 测试是否线程安全
+	}
+
+	l.bufPool.putBuffer(buf)
+}
+
+func (l *Logger) logf(logLevel int32, format string, args []interface{}) {
+	lowestLogLevel := atomic.LoadInt32(&l.logLevel)
+	logDest := atomic.LoadInt32(&l.logDest)
+	if lowestLogLevel > logLevel || logDest == kLogDestNone {
+		return
+	}
+
+	buf := l.bufPool.getBuffer()
+
+	t := time.Now()
+	l.genLogPrefix(buf, logLevel, 3, t)
+	fmt.Fprintf(buf, format, args...)
+	buf.WriteByte('\n')
+	output := buf.Bytes()
+	if logDest&kLogDestFile != kLogDestNone {
+		if l.flag&ControlFlagLogThrough != ControlFlagNone {
+			for i := logLevel; i >= lowestLogLevel; i-- {
+				l.loggers[i].log(t, output)
+			}
+		} else {
+			l.loggers[logLevel].log(t, output)
+		}
+	}
+	if logDest&kLogDestConsole != kLogDestNone {
+		os.Stdout.Write(output) // TODO 测试是否线程安全
+	}
+
+	l.bufPool.putBuffer(buf)
+}
+
+func (l *Logger) genLogPrefix(buf *buffer, logLevel int32, skip int, t time.Time) {
 	h, m, s := t.Clock()
 
 	// time
@@ -515,7 +600,7 @@ func genLogPrefix(buf *buffer, logLevel, skip int, t time.Time) {
 
 	var pc uintptr
 	var ok bool
-	if gConf.logFilenameLineNum() {
+	if l.flag&ControlFlagLogLineNum != ControlFlagNone {
 		var file string
 		var line int
 		pc, file, line, ok = runtime.Caller(skip)
@@ -527,7 +612,7 @@ func genLogPrefix(buf *buffer, logLevel, skip int, t time.Time) {
 			buf.Write(buf.tmp[:n+1])
 		}
 	}
-	if gConf.logFuncName() {
+	if l.flag&ControlFlagLogFuncName != ControlFlagNone {
 		if !ok {
 			pc, _, _, ok = runtime.Caller(skip)
 		}
@@ -540,47 +625,145 @@ func genLogPrefix(buf *buffer, logLevel, skip int, t time.Time) {
 	buf.WriteString("] ")
 }
 
-func log(logLevel int, format string, args []interface{}) {
-	buf := gBufPool.getBuffer()
+type logger struct {
+	file   *os.File
+	day    int
+	size   int64
+	closed bool
+	lock   sync.Mutex // Protects variables above
 
-	t := time.Now()
-	genLogPrefix(buf, logLevel, 3, t)
-	fmt.Fprintf(buf, format, args...)
-	buf.WriteByte('\n')
-	output := buf.Bytes()
-	if gConf.logThrough() {
-		for i := logLevel; i != kLogLevelTrace; i-- {
-			gLoggers[i].log(t, output)
+	// Variables that won't be changed at runtime go here
+	level           int32
+	symlinkFullPath string
+	parent          *Logger
+}
+
+func (l *logger) close() {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	l.file.Close()
+	l.file = nil
+	l.closed = true
+}
+
+func (l *logger) log(t time.Time, data []byte) {
+	y, m, d := t.Date()
+
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	if !l.closed {
+		if l.size >= l.parent.logFileMaxSize || l.day != d || l.file == nil {
+			hour, min, sec := t.Clock()
+			filename := fmt.Sprintf("%s%s.%d%02d%02d%02d%02d%02d%06d.log", l.parent.logPathPrefix, kLogLevelNames[l.level],
+				y, m, d, hour, min, sec, t.Nanosecond()/1000)
+			newFile, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				l.errLog(t, data, err)
+				return
+			}
+
+			l.file.Close()
+			l.file = newFile
+			l.day = d
+			l.size = 0
+
+			err = os.RemoveAll(l.symlinkFullPath)
+			if err != nil {
+				l.errLog(t, nil, err)
+			}
+			err = os.Symlink(path.Base(filename), l.symlinkFullPath)
+			if err != nil {
+				l.errLog(t, nil, err)
+			}
+
+			if l.parent.logFilePurgeCh != nil {
+				l.parent.logFilePurgeCh <- true
+			}
 		}
-		if gConf.logTrace() {
-			gLoggers[kLogLevelTrace].log(t, output)
+
+		n, _ := l.file.Write(data)
+		l.size += int64(n)
+	}
+}
+
+// errLog should only be called within (*logger).log()
+func (l *logger) errLog(t time.Time, originLog []byte, err error) {
+	buf := l.parent.bufPool.getBuffer()
+
+	l.parent.genLogPrefix(buf, l.level, 2, t)
+	buf.WriteString(err.Error())
+	buf.WriteByte('\n')
+	if l.file != nil {
+		n, _ := l.file.Write(buf.Bytes())
+		l.size += int64(n)
+		if len(originLog) > 0 {
+			n, _ = l.file.Write(originLog)
+			l.size += int64(n)
 		}
 	} else {
-		gLoggers[logLevel].log(t, output)
+		os.Stderr.Write(buf.Bytes()) // TODO 测试是否线程安全
+		if len(originLog) > 0 {
+			os.Stderr.Write(originLog)
+		}
 	}
-	if gConf.logToConsole() {
-		fmt.Print(string(output))
+
+	l.parent.bufPool.putBuffer(buf)
+}
+
+// sort files by created time embedded in the filename
+type byCreatedTime []string
+
+func (a byCreatedTime) Len() int {
+	return len(a)
+}
+
+func (a byCreatedTime) Less(i, j int) bool {
+	s1, s2 := a[i], a[j]
+	l1, l2 := len(s1), len(s2)
+	return s1[l1-24:l1-4] < s2[l2-24:l2-4]
+}
+
+func (a byCreatedTime) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+// init is called after all the variable declarations in the package have evaluated their initializers,
+// and those are evaluated only after all the imported packages have been initialized.
+// Besides initializations that cannot be expressed as declarations, a common use of init functions is to verify
+// or repair correctness of the program state before real execution begins.
+func init() {
+	tmpStrArr := strings.Split(path.Base(os.Args[0]), "\\") // for compatible with `go run` under Windows
+	kProgramName = tmpStrArr[len(tmpStrArr)-1]
+
+	var err error
+	kHostname, err = os.Hostname()
+	if err != nil {
+		kHostname = "Unknown"
 	}
 
-	gBufPool.putBuffer(buf)
+	curUser, err := user.Current()
+	if err == nil {
+		tmpStrArr = strings.Split(curUser.Username, "\\") // for compatible with Windows
+		kUsername = tmpStrArr[len(tmpStrArr)-1]
+	} else {
+		kUsername = "Unknown"
+	}
 }
 
-var gProgname = path.Base(os.Args[0])
+const (
+	kMaxInt64     = int64(^uint64(0) >> 1)
+	kLogLevelChar = "TIWEPF"
+)
 
-var gLogLevelNames = [kLogLevelMax]string{
-	"TRACE", "INFO", "WARN", "ERROR", "PANIC", "ABORT",
-}
+var (
+	kLogLevelNames = [kLogLevelCount]string{"TRACE", "INFO", "WARN", "ERROR", "PANIC", "FATAL"}
 
-var gConf = config{
-	logPath:     "./log/",
-	logflags:    kFlagLogFilenameLineNum | kFlagLogThrough,
-	maxfiles:    400,
-	nfilesToDel: 10,
-	maxsize:     100 * 1024 * 1024,
-}
+	kProgramName string
+	kHostname    string
+	kUsername    string
 
-var gSymlinks [kLogLevelMax]string
-var isSymlink map[string]bool
-var gFullSymlinks [kLogLevelMax]string
-var gBufPool bufferPool
-var gLoggers [kLogLevelMax]logger
+	defLoggerLock sync.Mutex // protects defLogger
+	defLogger     *Logger
+)
