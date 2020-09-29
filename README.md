@@ -28,7 +28,7 @@ Package inet provides some handy utilities for network programming.
 
 # logger
 
-Package logger is a go logging facility which provides functions Trace, Info, Warn, Error, Panic and Abort to write logs with different severity levels.
+Package logger is a go logging facility which provides functions Trace, Info, Warn, Error, Panic and Fatal to write logs with different severity levels.
 
 # pool
 
