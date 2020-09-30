@@ -112,6 +112,16 @@ import (
 type LogLevel int // LogLevel is used to exclude logs with lower level.
 
 const (
+	LogLevelTrace LogLevel = iota
+	LogLevelInfo
+	LogLevelWarn
+	LogLevelError
+	LogLevelPanic // Call panic() after log is written.
+	LogLevelFatal // Call os.Exit(-1) after log is written.
+	LogLevelCount // Number of different log levels.
+)
+
+const (
 	kLogLevelTrace = iota
 	kLogLevelInfo
 	kLogLevelWarn
@@ -119,26 +129,21 @@ const (
 	kLogLevelPanic
 	kLogLevelFatal
 	kLogLevelCount // Number of different log levels.
-
-	LogLevelTrace LogLevel = kLogLevelTrace
-	LogLevelInfo           = kLogLevelInfo
-	LogLevelWarn           = kLogLevelWarn
-	LogLevelError          = kLogLevelError
-	LogLevelPanic          = kLogLevelPanic // Call panic() after log is written.
-	LogLevelFatal          = kLogLevelFatal // Call os.Exit(-1) after log is written.
 )
 
 type LogDest int // LogDest controls where the logs are written.
 
 const (
-	kLogDestFile = 1 << iota
-	kLogDestConsole
-	kLogDestNone = 0
-
 	LogDestNone    LogDest = kLogDestNone                   // Don't write logs.
 	LogDestFile            = kLogDestFile                   // Write logs to files.
 	LogDestConsole         = kLogDestConsole                // Write logs to console.
 	LogDestBoth            = kLogDestFile | kLogDestConsole // Write logs both to files and console.
+)
+
+const (
+	kLogDestFile = 1 << iota
+	kLogDestConsole
+	kLogDestNone = 0
 )
 
 type ControlFlag int // ControlFlag controls how the logs are written. Use `|`(Or operator) to mix multiple flags.
