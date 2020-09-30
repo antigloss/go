@@ -550,7 +550,7 @@ func (l *Logger) log(logLevel int32, args []interface{}) {
 		}
 	}
 	if logDest&kLogDestConsole != kLogDestNone {
-		os.Stdout.Write(output) // TODO 测试是否线程安全
+		os.Stdout.Write(output)
 	}
 
 	l.bufPool.putBuffer(buf)
@@ -580,7 +580,7 @@ func (l *Logger) logf(logLevel int32, format string, args []interface{}) {
 		}
 	}
 	if logDest&kLogDestConsole != kLogDestNone {
-		os.Stdout.Write(output) // TODO 测试是否线程安全
+		os.Stdout.Write(output)
 	}
 
 	l.bufPool.putBuffer(buf)
@@ -703,7 +703,7 @@ func (l *logger) errLog(t time.Time, originLog []byte, err error) {
 			l.size += int64(n)
 		}
 	} else {
-		os.Stderr.Write(buf.Bytes()) // TODO 测试是否线程安全
+		os.Stderr.Write(buf.Bytes())
 		if len(originLog) > 0 {
 			os.Stderr.Write(originLog)
 		}
