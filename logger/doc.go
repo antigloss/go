@@ -16,33 +16,14 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
 */
 
+/*
+	Package logger is a goroutine-safe logging facility which writes logs with different severity levels to files, console, or both.
+	Logs with different severity levels are written to different logfiles.
+
+	It's recommended to use logger.Init to create a global Logger object, then use logger.Info/Infof/Warn/Warnf... to write logs.
+
+	logger.New can be use to create as many Logger objects as desired if in need.
+
+	For a quick reference about this package's features and performance, please refer to the associated README.md.(https://github.com/antigloss/go/blob/master/logger/README.md)
+*/
 package logger
-
-import (
-	"testing"
-)
-
-func init() {
-	Init(&Config{
-		LogDir:          "./logs",
-		LogFileMaxSize:  200,
-		LogFileMaxNum:   500,
-		LogFileNumToDel: 50,
-		LogLevel:        LogLevelInfo,
-		LogDest:         LogDestFile,
-		Flag:            ControlFlagLogLineNum,
-	})
-}
-
-func BenchmarkLogger(b *testing.B) {
-	b.Run("benchmarkInfo", func(b *testing.B) {
-		for i := 0; i != b.N; i++ {
-			Info("Failed to find player! uid", 1234, "plid", 678942, "cmd=getplayer xxx", 102020101)
-		}
-	})
-	b.Run("benchmarkInfof", func(b *testing.B) {
-		for i := 0; i != b.N; i++ {
-			Infof("Failed to find player! uid=%d plid=%d cmd=%s xxx=%d", 1234, 678942, "getplayer", 102020101)
-		}
-	})
-}
