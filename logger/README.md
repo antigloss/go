@@ -48,6 +48,7 @@ While the global Logger object should be enough for most cases, you can also cre
     }
 	newLogger.Info("abc", 123, 444.77)
 	newLogger.Error("abc", 123, 444.77)
+	newLogger.Close()
 
 # Documentation
 
