@@ -273,8 +273,9 @@ func Fatalf(format string, args ...interface{}) {
 //   1. Auto rotation: It'll create a new logfile whenever day changes or size of the current logfile exceeds the configured size limit.
 //   2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
 //   3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
-//   4. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
-//   5. It'll create symlinks that link to the most current logfiles.
+//   4. Log levels: 6 different levels are supported. Logs with different levels are written to different logfiles. By setting the Logger object to a higher log level, lower level logs will be filtered out.
+//   5. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
+//   6. It'll create symlinks that link to the most current logfiles.
 type Logger struct {
 	// Variables not allowed to be changed at runtime go here
 	logDir         string
