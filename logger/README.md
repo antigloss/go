@@ -11,7 +11,7 @@ Package logger is a goroutine-safe logging facility which  writes logs with diff
 5. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
 6. It'll create symlinks that link to the most current logfiles.
 
-# Basic example
+# Basic examples
 
 ## Use the global Logger object
 	// logger.Init must be called first to create the global Logger object
