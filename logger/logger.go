@@ -130,7 +130,7 @@ const (
 	kLogLevelCount // Number of different log levels.
 )
 
-type LogDest int // LogDest controls where the logs are written.
+type LogDest uint32 // LogDest controls where the logs are written.
 
 const (
 	LogDestFile    LogDest = 1 << iota // Write logs to files.
@@ -286,7 +286,7 @@ type Logger struct {
 
 	// Variables allowed to be changed at runtime go here
 	logLevel int32
-	logDest  int32
+	logDest  uint32
 
 	// Variables used by the log-purging goroutine go here
 	logFileCurNum    int // number of log files under `logDir` currently
@@ -325,7 +325,7 @@ func New(cfg *Config) (logger *Logger, err error) {
 		logFileCurNum: cfg.LogFileMaxNum, // Force to check if purging needed at startup
 		logFilesToDel: cfg.LogFileNumToDel,
 		logLevel:      int32(cfg.LogLevel),
-		logDest:       int32(cfg.LogDest),
+		logDest:       uint32(cfg.LogDest),
 		flag:          cfg.Flag,
 	}
 
@@ -344,7 +344,7 @@ func New(cfg *Config) (logger *Logger, err error) {
 
 // Close should be call once and only once to destroy the Logger object.
 func (l *Logger) Close() error {
-	atomic.StoreInt32(&l.logDest, kLogDestNone)
+	atomic.StoreUint32(&l.logDest, kLogDestNone)
 	for i := kLogLevelTrace; i != kLogLevelCount; i++ {
 		l.loggers[i].close()
 	}
@@ -534,7 +534,7 @@ func (l *Logger) getLogFilenames() ([]string, error) {
 
 func (l *Logger) log(logLevel int32, args []interface{}) {
 	lowestLogLevel := atomic.LoadInt32(&l.logLevel)
-	logDest := atomic.LoadInt32(&l.logDest)
+	logDest := atomic.LoadUint32(&l.logDest)
 	if lowestLogLevel > logLevel || logDest == kLogDestNone {
 		return
 	}
@@ -563,7 +563,7 @@ func (l *Logger) log(logLevel int32, args []interface{}) {
 
 func (l *Logger) logf(logLevel int32, format string, args []interface{}) {
 	lowestLogLevel := atomic.LoadInt32(&l.logLevel)
-	logDest := atomic.LoadInt32(&l.logDest)
+	logDest := atomic.LoadUint32(&l.logDest)
 	if lowestLogLevel > logLevel || logDest == kLogDestNone {
 		return
 	}
