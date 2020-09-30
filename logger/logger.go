@@ -134,10 +134,10 @@ const (
 type LogDest int // LogDest controls where the logs are written.
 
 const (
-	LogDestNone    LogDest = kLogDestNone                   // Don't write logs.
-	LogDestFile            = kLogDestFile                   // Write logs to files.
-	LogDestConsole         = kLogDestConsole                // Write logs to console.
-	LogDestBoth            = kLogDestFile | kLogDestConsole // Write logs both to files and console.
+	LogDestFile    LogDest                        = 1 << iota // Write logs to files.
+	LogDestConsole                                            // Write logs to console.
+	LogDestBoth    = LogDestFile | LogDestConsole             // Write logs both to files and console.
+	LogDestNone    = 0                                        // Don't write logs.
 )
 
 const (
