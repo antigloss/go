@@ -120,7 +120,6 @@ const (
 	LogLevelFatal // Call os.Exit(-1) after log is written.
 	LogLevelCount // Number of different log levels.
 )
-
 const (
 	kLogLevelTrace = iota
 	kLogLevelInfo
@@ -134,12 +133,13 @@ const (
 type LogDest int // LogDest controls where the logs are written.
 
 const (
-	LogDestFile    LogDest                        = 1 << iota // Write logs to files.
-	LogDestConsole                                            // Write logs to console.
-	LogDestBoth    = LogDestFile | LogDestConsole             // Write logs both to files and console.
-	LogDestNone    = 0                                        // Don't write logs.
+	LogDestFile    LogDest = 1 << iota // Write logs to files.
+	LogDestConsole                     // Write logs to console.
+	LogDestNone    = 0                 // Don't write logs.
 )
-
+const (
+	LogDestBoth = LogDestFile | LogDestConsole // Write logs both to files and console.
+)
 const (
 	kLogDestFile = 1 << iota
 	kLogDestConsole
