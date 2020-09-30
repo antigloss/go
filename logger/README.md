@@ -51,7 +51,7 @@ While the global Logger object should be enough for most cases, you can also cre
 
 # Documentation
 
-Please refer to [godoc](https://godoc.org/github.com/antigloss/go/logger) or [pkg.go.dev](https://godoc.org/github.com/antigloss/go/logger).
+Please refer to [godoc](https://godoc.org/github.com/antigloss/go/logger) or [pkg.go.dev](https://pkg.go.dev/github.com/antigloss/go/logger).
 
 # Performance
 
