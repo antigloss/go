@@ -16,7 +16,7 @@ Implements an LRU cache.
 
 # concurrent
 
-Package concurrent provides some concurrent control utilities and goroutine-safe containers.
+Package concurrent provides some goroutine-safe containers.
 
 # container
 
