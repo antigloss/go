@@ -19,14 +19,13 @@
 package sync_test
 
 import (
-	"github.com/antigloss/go/concurrent"
 	"github.com/antigloss/go/sync"
 )
 
 // This example shows the basic usage of Semaphore.
 func ExampleNewSemaphore() {
 	// Create a ready-to-use semaphore
-	sema := concurrent.NewSemaphore(10)
+	sema := sync.NewSemaphore(10)
 	// Block to acquire resources from the semaphore
 	semaResource := sema.Acquire()
 	// Release resources acquired from a semaphore
