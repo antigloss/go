@@ -20,6 +20,7 @@ package sync_test
 
 import (
 	"github.com/antigloss/go/sync"
+	"time"
 )
 
 // This example shows the basic usage of Semaphore.
@@ -32,6 +33,12 @@ func ExampleNewSemaphore() {
 	semaResource.Release()
 	// Try to acquire resources from the semaphore, returns nil if resources cannot be acquired immediately
 	semaResource = sema.TryAcquire()
+	if semaResource != nil {
+		// Release resources acquired from a semaphore
+		semaResource.Release()
+	}
+	// Wait at most 2 seconds to acquire resources from the semaphore, returns nil if resources cannot be acquired after timeout
+	semaResource = sema.TimedAcquire(2 * time.Second)
 	if semaResource != nil {
 		// Release resources acquired from a semaphore
 		semaResource.Release()

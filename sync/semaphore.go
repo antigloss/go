@@ -22,8 +22,10 @@
 package sync
 
 import (
+	"container/list"
 	"sync"
 	"sync/atomic"
+	"time"
 	"unsafe"
 )
 
@@ -41,7 +43,7 @@ func (sr *SemaphoreResource) Release() {
 	}
 }
 
-// Semaphore is a mimic of the POSIX semaphore based on sync.Cond. It could be used to limit the number of concurrent running goroutines.
+// Semaphore is a mimic of the POSIX semaphore based on channel and sync.Mutex. It could be used to limit the number of concurrent running goroutines.
 // Basic example:
 //	// Creates a ready-to-use semaphore
 //	sema := concurrent.NewSemaphore(InitValue)
@@ -51,68 +53,88 @@ func (sr *SemaphoreResource) Release() {
 //	// then another goroutine blocked in sema.Acquire() will be woken up and acquire the resources.
 //	semaResource.Release()
 type Semaphore struct {
-	cond       *sync.Cond
-	value      int
-	waitingNum int
+	lock    sync.Mutex
+	value   int
+	waiters list.List
 }
 
 // NewSemaphore creates a ready-to-use Semaphore.
 //   value: Initial value of the Semaphore.
 func NewSemaphore(value int) *Semaphore {
-	return &Semaphore{cond: sync.NewCond(new(sync.Mutex)), value: value}
+	return &Semaphore{value: value}
 }
 
 // Acquire decrements the semaphore, blocks if value of the semaphore is less than 1.
 func (s *Semaphore) Acquire() *SemaphoreResource {
-	s.cond.L.Lock()
-	for {
-		if s.value > 0 {
-			s.value--
-			break
-		} else {
-			s.waitingNum++
-			s.cond.Wait()
-			s.waitingNum--
-		}
+	s.lock.Lock()
+	if s.value > 0 {
+		s.value--
+		s.lock.Unlock()
+		return &SemaphoreResource{sema: unsafe.Pointer(s)}
 	}
-	s.cond.L.Unlock()
 
+	ready := make(chan bool)
+	s.waiters.PushBack(ready)
+	s.lock.Unlock()
+
+	<-ready
 	return &SemaphoreResource{sema: unsafe.Pointer(s)}
 }
 
 // TryAcquire tries to decrement the semaphore. It returns nil if the decrement cannot be done immediately.
 func (s *Semaphore) TryAcquire() (sr *SemaphoreResource) {
-	s.cond.L.Lock()
+	s.lock.Lock()
 	if s.value > 0 {
 		s.value--
 		sr = &SemaphoreResource{sema: unsafe.Pointer(s)}
 	}
-	s.cond.L.Unlock()
+	s.lock.Unlock()
 	return
 }
 
-/*
 // TimedAcquire waits at most a given time to decrement the semaphore. It returns nil if the decrement cannot be done after the given timeout.
-func (s *Semaphore) TimedAcquire(duration duration.Duration) (sr *SemaphoreResource) {
-	sr = s.TryAcquire()
-	if sr != nil {
+func (s *Semaphore) TimedAcquire(duration time.Duration) (sr *SemaphoreResource) {
+	s.lock.Lock()
+	if s.value > 0 {
+		s.value--
+		s.lock.Unlock()
+		sr = &SemaphoreResource{sema: unsafe.Pointer(s)}
 		return
 	}
 
-	// TODO
-	_ = duration
+	ready := make(chan bool)
+	elem := s.waiters.PushBack(ready)
+	s.lock.Unlock()
 
-	return nil
+	timer := time.NewTimer(duration)
+	select {
+	case <-timer.C:
+		s.lock.Lock()
+		select {
+		case <-ready:
+			sr = &SemaphoreResource{sema: unsafe.Pointer(s)}
+		default:
+			s.waiters.Remove(elem)
+		}
+		s.lock.Unlock()
+	case <-ready:
+		timer.Stop()
+		sr = &SemaphoreResource{sema: unsafe.Pointer(s)}
+	}
+
+	return
 }
-*/
 
 // release increments the semaphore. If the semaphore’s value consequently becomes greater than zero,
 // then another goroutine blocked in sema.Acquire() will be woken up and acquire the resources.
 func (s *Semaphore) release() {
-	s.cond.L.Lock()
-	s.value++
-	if s.waitingNum > 0 {
-		s.cond.Signal()
+	s.lock.Lock()
+	waiter := s.waiters.Front()
+	if waiter == nil {
+		s.value++
+	} else {
+		s.waiters.Remove(waiter)
+		close(waiter.Value.(chan bool))
 	}
-	s.cond.L.Unlock()
+	s.lock.Unlock()
 }
