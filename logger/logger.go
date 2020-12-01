@@ -75,6 +75,7 @@ const (
 	ControlFlagLogThrough  ControlFlag = 1 << iota // Controls if logs with higher level are written to lower level log files.
 	ControlFlagLogFuncName                         // Controls if function name is prepended to the logs.
 	ControlFlagLogLineNum                          // Controls if filename and line number are prepended to the logs.
+	ControlFlagLogDate                             // Controls if a date string formatted as '20201201' is prepended to the logs.
 	ControlFlagNone        = 0
 )
 
@@ -520,12 +521,21 @@ func (l *Logger) genLogPrefix(buf *buffer, logLevel int32, skip int, t time.Time
 
 	// time
 	buf.tmp[0] = kLogLevelChar[logLevel]
-	buf.twoDigits(1, h)
-	buf.tmp[3] = ':'
-	buf.twoDigits(4, m)
-	buf.tmp[6] = ':'
-	buf.twoDigits(7, s)
-	buf.Write(buf.tmp[:9])
+	surplus := 0
+	if l.flag&ControlFlagLogDate != ControlFlagNone {
+		year, mon, day := t.Date()
+		buf.nDigits(4, 1, year, '0')
+		buf.nDigits(2, 5, int(mon), '0')
+		buf.nDigits(2, 7, day, '0')
+		buf.tmp[9] = ' '
+		surplus = 9
+	}
+	buf.twoDigits(1+surplus, h)
+	buf.tmp[3+surplus] = ':'
+	buf.twoDigits(4+surplus, m)
+	buf.tmp[6+surplus] = ':'
+	buf.twoDigits(7+surplus, s)
+	buf.Write(buf.tmp[:9+surplus])
 
 	var pc uintptr
 	var ok bool
