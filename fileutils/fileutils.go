@@ -54,3 +54,20 @@ func CopyDirectory(src, dst string) error {
 	}
 	return nil
 }
+
+// ClearDirectory removes all files and directories under `dir` recursively.
+func ClearDirectory(dir string) error {
+	entries, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		err = os.RemoveAll(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
