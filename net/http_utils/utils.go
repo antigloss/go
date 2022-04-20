@@ -23,6 +23,22 @@ func Get(cli *http.Client, url string) (string, error) {
 	return string(cont), nil
 }
 
+// GetBytes sends an http GET request and returns the response body as []byte
+func GetBytes(cli *http.Client, url string) ([]byte, error) {
+	rsp, err := cli.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer rsp.Body.Close()
+
+	cont, err := io.ReadAll(rsp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return cont, nil
+}
+
 // Download downloads the file from `url` and saves it to `dstFilepath`
 func Download(cli *http.Client, url, dstFilepath string) error {
 	rsp, err := cli.Get(url)
