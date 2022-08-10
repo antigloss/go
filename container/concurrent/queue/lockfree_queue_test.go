@@ -35,7 +35,7 @@ const (
 
 var out *testing.T
 var wg sync.WaitGroup
-var lfq = NewLockfreeQueue()
+var lfq = NewLockfreeQueue[int]()
 var popBuf [kGoRoutineNum][]int
 
 func TestLockfreeQueue(t *testing.T) {
@@ -72,8 +72,8 @@ func TestLockfreeQueue(t *testing.T) {
 		resultBuf = append(resultBuf, popBuf[i]...)
 	}
 	// in case there are some elements left in the queue
-	for v := lfq.Pop(); v != nil; v = lfq.Pop() {
-		resultBuf = append(resultBuf, v.(int))
+	for v, ok := lfq.Pop(); ok; v, ok = lfq.Pop() {
+		resultBuf = append(resultBuf, v)
 	}
 	sort.Ints(resultBuf)
 	for i := 0; i != kPushingNum; i++ {
@@ -94,8 +94,8 @@ func push() {
 
 func pop_only() {
 	for i := 0; i != kPushingNum; i++ {
-		v := lfq.Pop()
-		if v == nil {
+		_, ok := lfq.Pop()
+		if !ok {
 			out.Error("Should never be nil!")
 		}
 	}
@@ -104,9 +104,9 @@ func pop_only() {
 
 func pop_while_pushing(n int) {
 	for i := 0; i != kPushingNum*2; i++ {
-		v := lfq.Pop()
-		if v != nil {
-			popBuf[n] = append(popBuf[n], v.(int))
+		v, ok := lfq.Pop()
+		if ok {
+			popBuf[n] = append(popBuf[n], v)
 		}
 	}
 	wg.Done()

@@ -41,7 +41,7 @@ type LinkedOrderedMap[K constraints.Ordered, V any] struct {
 //
 // Example:
 //
-//	lom := New()
+//	lom := New[int, int]()
 func New[K constraints.Ordered, V any]() *LinkedOrderedMap[K, V] {
 	return &LinkedOrderedMap[K, V]{}
 }

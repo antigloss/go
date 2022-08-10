@@ -8,6 +8,6 @@ LockfreeQueue is a goroutine-safe Queue implementation. The overall performance 
 
 ## Basic example
 
-    lfq := queue.NewLockfreeQueue() // create a LockfreeQueue
+    lfq := queue.NewLockfreeQueue[int]() // create a LockfreeQueue
     lfq.Push(100) // Push an element into the queue
-    v := lfq.Pop() // Pop an element from the queue
+    v, ok := lfq.Pop() // Pop an element from the queue
