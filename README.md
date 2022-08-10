@@ -30,7 +30,7 @@ Package fileutils provides some handy file utilities.
 
 A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
 
-# inet
+# net
 
 Package inet provides some handy utilities for network programming.
 
