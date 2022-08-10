@@ -74,8 +74,9 @@ func (lfq *LockfreeQueue[T]) Pop() (T, bool) {
 func (lfq *LockfreeQueue[T]) Push(val T) {
 	node := unsafe.Pointer(&lfqNode[T]{val: val})
 	for {
-		t := atomic.LoadPointer(&lfq.tail)
-		rt := (*lfqNode[T])(t)
+		rt := (*lfqNode[T])(atomic.LoadPointer(&lfq.tail))
+		//t := atomic.LoadPointer(&lfq.tail)
+		//rt := (*lfqNode[T])(t)
 		if atomic.CompareAndSwapPointer(&rt.next, nil, node) {
 			atomic.StorePointer(&lfq.tail, node)
 			// If dead loop occurs, use CompareAndSwapPointer instead of StorePointer
