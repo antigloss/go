@@ -1,4 +1,4 @@
-module github.com/antigloss/go
+module github.com/antigloss/go/v2
 
 go 1.18
 
