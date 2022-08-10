@@ -1,4 +1,22 @@
-// Author: https://github.com/antigloss
+/*
+ *
+ * lru - LRU cache package
+ * Copyright (C) 2018 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 /*
 Package lru provides a goroutine safe LRU cache implementation based on "github.com/golang/groupcache/lru".
@@ -37,9 +55,10 @@ type cachedNode struct {
 }
 
 // NewCache creates a ready-to-use Cache.
-//   maxEntries: Limit of cached objects, LRU eviction will be triggered when reached.
-//   maxCachedSize: Limit of total cached objects' size in bytes, LRU eviction will be triggered when reached.
-//   onEvicted: Optionally specificies a callback function to be executed when an entry is purged from the cache.
+//
+//	maxEntries: Limit of cached objects, LRU eviction will be triggered when reached.
+//	maxCachedSize: Limit of total cached objects' size in bytes, LRU eviction will be triggered when reached.
+//	onEvicted: Optionally specificies a callback function to be executed when an entry is purged from the cache.
 func NewCache(maxEntries int, maxCachedSize int64, onEvicted func(key, object interface{})) *Cache {
 	c := &Cache{
 		c: &lru.Cache{
@@ -56,9 +75,10 @@ func NewCache(maxEntries int, maxCachedSize int64, onEvicted func(key, object in
 }
 
 // Add adds an object to the cache, LRU eviction will be triggered if limit reached after adding.
-//   key: Key of the cached object.
-//   object: Object to be cached.
-//   objectSize: Size in bytes of the cached object.
+//
+//	key: Key of the cached object.
+//	object: Object to be cached.
+//	objectSize: Size in bytes of the cached object.
 func (c *Cache) Add(key, object interface{}, objectSize int64) {
 	c.mtx.Lock()
 	c.c.Add(key, &cachedNode{object, objectSize})
