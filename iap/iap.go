@@ -1,3 +1,23 @@
+/*
+ *
+ * iap - In App Purchase
+ * Copyright (C) 2015 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 // Package iap implements the ability to easily validate a receipt with Apple's VerifyReceipt service (compatible with iOS6 and iOS7 response).
 // Documentation: https://developer.apple.com/library/ios/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html#//apple_ref/doc/uid/TP40010573-CH106-SW10
 package iap
@@ -6,7 +26,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -94,7 +114,7 @@ type Receipt struct {
 }
 
 type receiptRequestData struct {
-	Receiptdata string `json:"receipt-data"`
+	ReceiptData string `json:"receipt-data"`
 }
 
 type iOS6ResponseData struct {
@@ -131,7 +151,7 @@ func sendReceiptToApple(receiptData, url string) (*Receipt, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
