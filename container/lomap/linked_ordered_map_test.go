@@ -1,3 +1,23 @@
+/*
+ *
+ * lomap - Linked Ordered Map, an ordered map that supports iteration in insertion order.
+ * Copyright (C) 2016 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package lomap
 
 import (
@@ -12,15 +32,12 @@ const (
 )
 
 var t *testing.T
-var nbs sort.IntSlice
 
 func TestLinkedOrderedMap(tt *testing.T) {
 	t = tt
 	rand.Seed(time.Now().Unix())
 
-	rbt := New(func(a, b interface{}) int {
-		return a.(int) - b.(int)
-	})
+	rbt := New[int, int]()
 
 	// Phase 1
 
@@ -91,7 +108,7 @@ func TestLinkedOrderedMap(tt *testing.T) {
 	}
 }
 
-func insertRandomly(rbt *LinkedOrderedMap, insertedNums sort.IntSlice, m map[int]int) {
+func insertRandomly(rbt *LinkedOrderedMap[int, int], insertedNums sort.IntSlice, m map[int]int) {
 	i := 0
 	for i != kInsertTimes {
 		n := rand.Int()
@@ -108,7 +125,7 @@ func insertRandomly(rbt *LinkedOrderedMap, insertedNums sort.IntSlice, m map[int
 	}
 }
 
-func removeRandomly(rbt *LinkedOrderedMap, insertedNums, deletedNums sort.IntSlice, m map[int]int, deleteTimes int) {
+func removeRandomly(rbt *LinkedOrderedMap[int, int], insertedNums, deletedNums sort.IntSlice, m map[int]int, deleteTimes int) {
 	for i := 0; i != deleteTimes; i++ {
 		nLen := len(insertedNums)
 		idx := rand.Int() % nLen
@@ -128,7 +145,7 @@ func removeRandomly(rbt *LinkedOrderedMap, insertedNums, deletedNums sort.IntSli
 	}
 }
 
-func runTestCases(msg string, rbt *LinkedOrderedMap, m map[int]int, insertedNums sort.IntSlice) bool {
+func runTestCases(msg string, rbt *LinkedOrderedMap[int, int], m map[int]int, insertedNums sort.IntSlice) bool {
 	if !verifySize(msg, rbt, m, insertedNums) {
 		return false
 	}
@@ -148,7 +165,7 @@ func runTestCases(msg string, rbt *LinkedOrderedMap, m map[int]int, insertedNums
 	return true
 }
 
-func verifySize(msg string, rbt *LinkedOrderedMap, m map[int]int, insertedNums sort.IntSlice) bool {
+func verifySize(msg string, rbt *LinkedOrderedMap[int, int], m map[int]int, insertedNums sort.IntSlice) bool {
 	if len(m) != rbt.Size() || len(insertedNums) != rbt.Size() {
 		t.Errorf("%s. Unexpected number of elements! mLen=%d iLen=%d rbtSize=%d",
 			msg, len(m), len(insertedNums), rbt.Size())
@@ -157,10 +174,10 @@ func verifySize(msg string, rbt *LinkedOrderedMap, m map[int]int, insertedNums s
 	return true
 }
 
-func verifyData(msg string, rbt *LinkedOrderedMap, m map[int]int) bool {
+func verifyData(msg string, rbt *LinkedOrderedMap[int, int], m map[int]int) bool {
 	for k, v := range m {
 		val, found := rbt.Get(k)
-		if !found || val.(int) != v {
+		if !found || val != v {
 			t.Errorf("%s. Get() failed! Expecting %d but gets %v", msg, k, val)
 			return false
 		}
@@ -168,11 +185,11 @@ func verifyData(msg string, rbt *LinkedOrderedMap, m map[int]int) bool {
 	return true
 }
 
-func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntSlice) bool {
+func verifyInsertOrder(msg string, rbt *LinkedOrderedMap[int, int], insertedNums sort.IntSlice) bool {
 	i := 0
 	for it := rbt.LinkedIterator(); it.IsValid(); it.Next() {
-		if insertedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value().(int))
+		if insertedNums[i] != it.Value() {
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value())
 			return false
 		}
 		i++
@@ -180,8 +197,8 @@ func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 
 	i = len(insertedNums) - 1
 	for it := rbt.ReverseLinkedIterator(); it.IsValid(); it.Next() {
-		if insertedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value().(int))
+		if insertedNums[i] != it.Value() {
+			t.Errorf("%s. Wrong insert order! Expecting %d but gets %d", msg, insertedNums[i], it.Value())
 			return false
 		}
 		i--
@@ -190,15 +207,15 @@ func verifyInsertOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 	return true
 }
 
-func verifySortedOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntSlice) bool {
+func verifySortedOrder(msg string, rbt *LinkedOrderedMap[int, int], insertedNums sort.IntSlice) bool {
 	var sortedNums sort.IntSlice
 	sortedNums = append(sortedNums, insertedNums...)
 	sortedNums.Sort()
 
 	i := 0
 	for it := rbt.Iterator(); it.IsValid(); it.Next() {
-		if sortedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value().(int))
+		if sortedNums[i] != it.Value() {
+			t.Errorf("%s. Ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value())
 			return false
 		}
 		i++
@@ -206,8 +223,8 @@ func verifySortedOrder(msg string, rbt *LinkedOrderedMap, insertedNums sort.IntS
 
 	i = len(sortedNums) - 1
 	for it := rbt.ReverseIterator(); it.IsValid(); it.Next() {
-		if sortedNums[i] != it.Value().(int) {
-			t.Errorf("%s. Reverse ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value().(int))
+		if sortedNums[i] != it.Value() {
+			t.Errorf("%s. Reverse ordered iteration %d: Expecting %d but gets %d", msg, i, sortedNums[i], it.Value())
 			return false
 		}
 		i--

@@ -1,110 +1,126 @@
-// Author: https://github.com/antigloss
+/*
+ *
+ * lomap - Linked Ordered Map, an ordered map that supports iteration in insertion order.
+ * Copyright (C) 2016 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
-// Package lomap implements an linked ordered map which supports iteration in insertion order.
+// Package lomap implements a linked ordered map which supports iteration in insertion order.
 // It's also optimized for ordered traverse. lomap is short for Linked Ordered Map.
 //
 // Caution: This package is not goroutine-safe!
 package lomap
 
-// Comparator compares a and b and returns:
-//     0 if they are equal
-//     < 0 if a < b
-//     > 0 if a > b
-type Comparator func(a, b interface{}) int
+import "golang.org/x/exp/constraints"
 
 // LinkedOrderedMap is an linked ordered map which supports iteration in insertion order.
 // It's also optimized for ordered traverse.
-type LinkedOrderedMap struct {
-	root        *lrbtNode // root of the rbtree
-	head        *lrbtNode // head and tail forms an double linked list in insertion order
-	tail        *lrbtNode
-	orderedHead *lrbtNode // orderedHead and orderedTail forms an double linked list in ascend order
-	orderedTail *lrbtNode
-	size        int        // size of the map
-	comp        Comparator // for comparing keys of the map
+type LinkedOrderedMap[K constraints.Ordered, V any] struct {
+	root        *lrbtNode[K, V] // root of the rbtree
+	head        *lrbtNode[K, V] // head and tail forms an double linked list in insertion order
+	tail        *lrbtNode[K, V]
+	orderedHead *lrbtNode[K, V] // orderedHead and orderedTail forms an double linked list in ascend order
+	orderedTail *lrbtNode[K, V]
+	size        int // size of the map
 }
 
 // New is the only way to get a new, ready-to-use LinkedOrderedMap object.
 //
-//   comparator: for comparing keys of the LinkedOrderedMap
-//
 // Example:
 //
-//	 lom := New(func(a, b interface{}) int {return a.(int) - b.(int)})
-func New(comparator Comparator) *LinkedOrderedMap {
-	return &LinkedOrderedMap{comp: comparator}
+//	lom := New()
+func New[K constraints.Ordered, V any]() *LinkedOrderedMap[K, V] {
+	return &LinkedOrderedMap[K, V]{}
 }
 
 // Insert inserts a new element into the LinkedOrderedMap if it doesn't already contain an element with an equivalent key.
 // Nothing will be changed if the LinkedOrderedMap already contains an element with an equivalent key.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-//   key: key of the value to be inserted
-//   value: value to be inserted
+//
+//	key: key of the value to be inserted
+//	value: value to be inserted
+//
 // Return value: true if the insertion took place and false otherwise.
-func (m *LinkedOrderedMap) Insert(key, value interface{}) bool {
+func (m *LinkedOrderedMap[K, V]) Insert(key K, value V) bool {
 	return m.set(key, value, false)
 }
 
 // Set inserts a new element into the LinkedOrderedMap or updates the existing element with the new value.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-//   key: key of the value to be inserted/updated
-//   value: value to be inserted/updated
+//
+//	key: key of the value to be inserted/updated
+//	value: value to be inserted/updated
+//
 // Return value: true if the insertion took place and false if the update took place.
-func (m *LinkedOrderedMap) Set(key, value interface{}) bool {
+func (m *LinkedOrderedMap[K, V]) Set(key K, value V) bool {
 	return m.set(key, value, true)
 }
 
 // Get returns value of the key and true if the given key is found.
 // If the given key is not found, it returns nil, false
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-func (m *LinkedOrderedMap) Get(key interface{}) ( /*value*/ interface{} /*found*/, bool) {
+func (m *LinkedOrderedMap[K, V]) Get(key K) ( /*value*/ V /*found*/, bool) {
 	node := m.search(key)
 	if node != nil {
 		return node.v, true
 	}
-	return nil, false
+	var v V
+	return v, false
 }
 
 // Erase removes the element with the given key from the map.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-func (m *LinkedOrderedMap) Erase(key interface{}) {
+func (m *LinkedOrderedMap[K, V]) Erase(key K) {
 	m.erase(m.search(key))
 }
 
 // Empty returns true if the map does not contain any element, otherwise it returns false.
-func (m *LinkedOrderedMap) Empty() bool {
+func (m *LinkedOrderedMap[K, V]) Empty() bool {
 	return m.size == 0
 }
 
 // Size returns the number of elements in the map.
-func (m *LinkedOrderedMap) Size() int {
+func (m *LinkedOrderedMap[K, V]) Size() int {
 	return m.size
 }
 
 // Iterator returns an iterator for iterating the LinkedOrderedMap.
-func (m *LinkedOrderedMap) Iterator() *Iterator {
-	return &Iterator{m.orderedHead}
+func (m *LinkedOrderedMap[K, V]) Iterator() *Iterator[K, V] {
+	return &Iterator[K, V]{m.orderedHead}
 }
 
 // ReverseIterator returns an iterator for iterating the LinkedOrderedMap in reverse order.
-func (m *LinkedOrderedMap) ReverseIterator() *ReverseIterator {
-	return &ReverseIterator{m.orderedTail}
+func (m *LinkedOrderedMap[K, V]) ReverseIterator() *ReverseIterator[K, V] {
+	return &ReverseIterator[K, V]{m.orderedTail}
 }
 
 // LinkedIterator returns an iterator for iterating the LinkedOrderedMap in insertion order.
-func (m *LinkedOrderedMap) LinkedIterator() *LinkedIterator {
-	return &LinkedIterator{m.head}
+func (m *LinkedOrderedMap[K, V]) LinkedIterator() *LinkedIterator[K, V] {
+	return &LinkedIterator[K, V]{m.head}
 }
 
 // FindLinkedIterator returns a LinkedIterator to the `key`.
 // If found, LinkedIterator.IsValid() returns true, otherwise it returns false.
 // Key should adhere to the comparator's type assertion, otherwise it will panic.
-func (m *LinkedOrderedMap) FindLinkedIterator(key interface{}) *LinkedIterator {
-	return &LinkedIterator{m.search(key)}
+func (m *LinkedOrderedMap[K, V]) FindLinkedIterator(key K) *LinkedIterator[K, V] {
+	return &LinkedIterator[K, V]{m.search(key)}
 }
 
 // MoveToBack move the element specified by `iter` to the back of the linked list as if it is just inserted.
-func (m *LinkedOrderedMap) MoveToBack(iter *LinkedIterator) {
+func (m *LinkedOrderedMap[K, V]) MoveToBack(iter *LinkedIterator[K, V]) {
 	node := iter.node
 	if node == nil || node.next == nil { // node is nil or the last node
 		return
@@ -123,25 +139,23 @@ func (m *LinkedOrderedMap) MoveToBack(iter *LinkedIterator) {
 }
 
 // EraseByLinkedIterator erases the element specified by `iter`
-func (m *LinkedOrderedMap) EraseByLinkedIterator(iter *LinkedIterator) {
+func (m *LinkedOrderedMap[K, V]) EraseByLinkedIterator(iter *LinkedIterator[K, V]) {
 	m.erase(iter.node)
 	iter.node = nil
 }
 
 // EraseFront erases the front element
-func (m *LinkedOrderedMap) EraseFront() {
+func (m *LinkedOrderedMap[K, V]) EraseFront() {
 	m.erase(m.head)
 }
 
 // ReverseLinkedIterator returns an iterator for iterating the LinkedOrderedMap in reverse insertion order.
-func (m *LinkedOrderedMap) ReverseLinkedIterator() *ReverseLinkedIterator {
-	return &ReverseLinkedIterator{m.tail}
+func (m *LinkedOrderedMap[K, V]) ReverseLinkedIterator() *ReverseLinkedIterator[K, V] {
+	return &ReverseLinkedIterator[K, V]{m.tail}
 }
 
-// TODO how to support Clone()?
-
 // Clear removes all elements from the map.
-func (m *LinkedOrderedMap) Clear() {
+func (m *LinkedOrderedMap[K, V]) Clear() {
 	m.root = nil
 	m.head = nil
 	m.tail = nil
@@ -152,8 +166,8 @@ func (m *LinkedOrderedMap) Clear() {
 
 // Count returns the number of elements with key key, which is either 1 or 0 since this container does not allow duplicates.
 //
-//   key: key value of the elements to count
-func (m *LinkedOrderedMap) Count(key interface{}) int {
+//	key: key value of the elements to count
+func (m *LinkedOrderedMap[K, V]) Count(key K) int {
 	if m.search(key) != nil {
 		return 1
 	}
@@ -161,13 +175,12 @@ func (m *LinkedOrderedMap) Count(key interface{}) int {
 }
 
 // set inserts a new node into the LinkedOrderedMap or updates the existing node with the new value.
-func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool {
-	newNode := &lrbtNode{k: key, v: value}
+func (m *LinkedOrderedMap[K, V]) set(key K, value V, updateIfExist bool) bool {
+	newNode := &lrbtNode[K, V]{k: key, v: value}
 	if m.root != nil {
 		node := m.root
 		for {
-			ret := m.comp(key, node.k)
-			if ret > 0 { // k is bigger than the node.k, go right.
+			if key > node.k { // k is bigger than the node.k, go right.
 				if node.right != nil {
 					node = node.right
 				} else {
@@ -175,7 +188,7 @@ func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool 
 					newNode.nodeType = kLRBTNodeTypeRightChild
 					break
 				}
-			} else if ret < 0 { // k is smaller than the node.k, go left.
+			} else if key < node.k { // k is smaller than the node.k, go left.
 				if node.left != nil {
 					node = node.left
 				} else {
@@ -199,7 +212,7 @@ func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool 
 		m.tail = newNode
 		// ordered linked list
 		if newNode.isLeftChild() {
-			var nextNode *lrbtNode
+			var nextNode *lrbtNode[K, V]
 			if newNode.right == nil {
 				nextNode = newNode.parent
 			} else {
@@ -214,7 +227,7 @@ func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool 
 				m.orderedHead = newNode
 			}
 		} else if newNode.isRightChild() {
-			var prevNode *lrbtNode
+			var prevNode *lrbtNode[K, V]
 			if newNode.left == nil {
 				prevNode = newNode.parent
 			} else {
@@ -249,7 +262,7 @@ func (m *LinkedOrderedMap) set(key, value interface{}, updateIfExist bool) bool 
 }
 
 // Case 1: root node
-func (m *LinkedOrderedMap) insertCase1(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) insertCase1(node *lrbtNode[K, V]) {
 	if node.parent != nil {
 		m.insertCase2(node)
 	} else { // Root node
@@ -258,14 +271,14 @@ func (m *LinkedOrderedMap) insertCase1(node *lrbtNode) {
 }
 
 // Case 2: black node can have children of any color
-func (m *LinkedOrderedMap) insertCase2(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) insertCase2(node *lrbtNode[K, V]) {
 	if !node.parent.isBlack {
 		m.insertCase3(node)
 	}
 }
 
 // Case 3: red nodes' children must be black
-func (m *LinkedOrderedMap) insertCase3(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) insertCase3(node *lrbtNode[K, V]) {
 	uncle := node.parent.sibling()
 	if !uncle.isBlackNode() {
 		node.parent.isBlack = true
@@ -278,7 +291,7 @@ func (m *LinkedOrderedMap) insertCase3(node *lrbtNode) {
 }
 
 // Case 4
-func (m *LinkedOrderedMap) insertCase4(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) insertCase4(node *lrbtNode[K, V]) {
 	if node.isRightChild() && node.parent.isLeftChild() {
 		m.rotateLeft(node.parent)
 		node = node.left
@@ -290,7 +303,7 @@ func (m *LinkedOrderedMap) insertCase4(node *lrbtNode) {
 }
 
 // Case 5
-func (m *LinkedOrderedMap) insertCase5(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) insertCase5(node *lrbtNode[K, V]) {
 	node.parent.isBlack = true
 	grandparent := node.parent.parent
 	grandparent.isBlack = false
@@ -302,14 +315,14 @@ func (m *LinkedOrderedMap) insertCase5(node *lrbtNode) {
 }
 
 // Case 1: root node
-func (m *LinkedOrderedMap) deleteCase1(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase1(node *lrbtNode[K, V]) {
 	if node.parent != nil {
 		m.deleteCase2(node)
 	}
 }
 
 // Case 2: sibling node is red
-func (m *LinkedOrderedMap) deleteCase2(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase2(node *lrbtNode[K, V]) {
 	sibling := node.sibling()
 	if !sibling.isBlackNode() {
 		node.parent.isBlack = false
@@ -324,7 +337,7 @@ func (m *LinkedOrderedMap) deleteCase2(node *lrbtNode) {
 }
 
 // Case 3: parent, sibling and its children are black
-func (m *LinkedOrderedMap) deleteCase3(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase3(node *lrbtNode[K, V]) {
 	sibling := node.sibling()
 	if node.parent.isBlack && sibling.isBlack && sibling.left.isBlackNode() && sibling.right.isBlackNode() {
 		sibling.isBlack = false
@@ -335,7 +348,7 @@ func (m *LinkedOrderedMap) deleteCase3(node *lrbtNode) {
 }
 
 // Case 4: parent is red and sibling and its children are black
-func (m *LinkedOrderedMap) deleteCase4(node, sibling *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase4(node, sibling *lrbtNode[K, V]) {
 	if !node.parent.isBlack && sibling.isBlack && sibling.left.isBlackNode() && sibling.right.isBlackNode() {
 		sibling.isBlack = false
 		node.parent.isBlack = true
@@ -345,7 +358,7 @@ func (m *LinkedOrderedMap) deleteCase4(node, sibling *lrbtNode) {
 }
 
 // Case 5: only one child of sibling is red
-func (m *LinkedOrderedMap) deleteCase5(node, sibling *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase5(node, sibling *lrbtNode[K, V]) {
 	if node.isLeftChild() && sibling.isBlack && !sibling.left.isBlackNode() && sibling.right.isBlackNode() {
 		sibling.isBlack = false
 		sibling.left.isBlack = true
@@ -359,7 +372,7 @@ func (m *LinkedOrderedMap) deleteCase5(node, sibling *lrbtNode) {
 }
 
 // Case 6
-func (m *LinkedOrderedMap) deleteCase6(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) deleteCase6(node *lrbtNode[K, V]) {
 	sibling := node.sibling()
 	sibling.isBlack = node.parent.isBlack
 	node.parent.isBlack = true
@@ -372,7 +385,7 @@ func (m *LinkedOrderedMap) deleteCase6(node *lrbtNode) {
 	}
 }
 
-func (m *LinkedOrderedMap) rotateLeft(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) rotateLeft(node *lrbtNode[K, V]) {
 	right := node.right
 	m.replaceNode(node, right)
 	node.right = right.left
@@ -385,7 +398,7 @@ func (m *LinkedOrderedMap) rotateLeft(node *lrbtNode) {
 	node.nodeType = kLRBTNodeTypeLeftChild
 }
 
-func (m *LinkedOrderedMap) rotateRight(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) rotateRight(node *lrbtNode[K, V]) {
 	left := node.left
 	m.replaceNode(node, left)
 	node.left = left.right
@@ -398,13 +411,12 @@ func (m *LinkedOrderedMap) rotateRight(node *lrbtNode) {
 	node.nodeType = kLRBTNodeTypeRightChild
 }
 
-func (m *LinkedOrderedMap) search(key interface{}) (node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) search(key K) (node *lrbtNode[K, V]) {
 	node = m.root
 	for node != nil {
-		ret := m.comp(key, node.k)
-		if ret > 0 {
+		if key > node.k {
 			node = node.right
-		} else if ret < 0 {
+		} else if key < node.k {
 			node = node.left
 		} else {
 			break
@@ -413,7 +425,7 @@ func (m *LinkedOrderedMap) search(key interface{}) (node *lrbtNode) {
 	return
 }
 
-func (m *LinkedOrderedMap) replaceNode(oldNode *lrbtNode, newNode *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) replaceNode(oldNode *lrbtNode[K, V], newNode *lrbtNode[K, V]) {
 	if oldNode.parent == nil {
 		m.root = newNode
 		if newNode != nil {
@@ -437,7 +449,7 @@ func (m *LinkedOrderedMap) replaceNode(oldNode *lrbtNode, newNode *lrbtNode) {
 	}
 }
 
-func (m *LinkedOrderedMap) erase(node *lrbtNode) {
+func (m *LinkedOrderedMap[K, V]) erase(node *lrbtNode[K, V]) {
 	if node == nil {
 		return
 	}
@@ -515,7 +527,7 @@ func (m *LinkedOrderedMap) erase(node *lrbtNode) {
 	}
 
 	// At this point, it's certain that node has at most one children
-	var child *lrbtNode
+	var child *lrbtNode[K, V]
 	if node.right == nil {
 		child = node.left
 	} else {
@@ -561,106 +573,106 @@ func (m *LinkedOrderedMap) erase(node *lrbtNode) {
 }
 
 // Iterator is used for iterating the LinkedOrderedMap.
-type Iterator struct {
-	node *lrbtNode
+type Iterator[K constraints.Ordered, V any] struct {
+	node *lrbtNode[K, V]
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false.
-func (it *Iterator) IsValid() bool {
+func (it *Iterator[K, V]) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map
-func (it *Iterator) Next() {
+func (it *Iterator[K, V]) Next() {
 	it.node = it.node.orderedNext
 }
 
 // Key returns the key of the underlying element
-func (it *Iterator) Key() interface{} {
+func (it *Iterator[K, V]) Key() K {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *Iterator) Value() interface{} {
+func (it *Iterator[K, V]) Value() V {
 	return it.node.v
 }
 
 // ReverseIterator is used for iterating the LinkedOrderedMap in reverse order.
-type ReverseIterator struct {
-	node *lrbtNode
+type ReverseIterator[K constraints.Ordered, V any] struct {
+	node *lrbtNode[K, V]
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false.
-func (it *ReverseIterator) IsValid() bool {
+func (it *ReverseIterator[K, V]) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map in reverse order
-func (it *ReverseIterator) Next() {
+func (it *ReverseIterator[K, V]) Next() {
 	it.node = it.node.orderedPrev
 }
 
 // Key returns the key of the underlying element
-func (it *ReverseIterator) Key() interface{} {
+func (it *ReverseIterator[K, V]) Key() K {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *ReverseIterator) Value() interface{} {
+func (it *ReverseIterator[K, V]) Value() V {
 	return it.node.v
 }
 
 // LinkedIterator is used for iterating the LinkedOrderedMap in insertion order.
-type LinkedIterator struct {
-	node *lrbtNode
+type LinkedIterator[K constraints.Ordered, V any] struct {
+	node *lrbtNode[K, V]
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false.
-func (it *LinkedIterator) IsValid() bool {
+func (it *LinkedIterator[K, V]) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map in insertion order
-func (it *LinkedIterator) Next() {
+func (it *LinkedIterator[K, V]) Next() {
 	it.node = it.node.next
 }
 
 // Key returns the key of the underlying element
-func (it *LinkedIterator) Key() interface{} {
+func (it *LinkedIterator[K, V]) Key() K {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *LinkedIterator) Value() interface{} {
+func (it *LinkedIterator[K, V]) Value() V {
 	return it.node.v
 }
 
 // ReverseLinkedIterator is used for iterating the LinkedOrderedMap in reverse insertion order.
-type ReverseLinkedIterator struct {
-	node *lrbtNode
+type ReverseLinkedIterator[K constraints.Ordered, V any] struct {
+	node *lrbtNode[K, V]
 }
 
 // IsValid returns true if the iterator is valid for use, false otherwise.
 // We must not call Next, Key, or Value if IsValid returns false.
-func (it *ReverseLinkedIterator) IsValid() bool {
+func (it *ReverseLinkedIterator[K, V]) IsValid() bool {
 	return it.node != nil
 }
 
 // Next advances the iterator to the next element of the map in reverse insertion order
-func (it *ReverseLinkedIterator) Next() {
+func (it *ReverseLinkedIterator[K, V]) Next() {
 	it.node = it.node.prev
 }
 
 // Key returns the key of the underlying element
-func (it *ReverseLinkedIterator) Key() interface{} {
+func (it *ReverseLinkedIterator[K, V]) Key() K {
 	return it.node.k
 }
 
 // Value returns the value of the underlying element
-func (it *ReverseLinkedIterator) Value() interface{} {
+func (it *ReverseLinkedIterator[K, V]) Value() V {
 	return it.node.v
 }
 
@@ -672,21 +684,21 @@ const (
 	kLRBTNodeTypeRightChild
 )
 
-type lrbtNode struct {
-	k           interface{}
-	v           interface{}
+type lrbtNode[K constraints.Ordered, V any] struct {
+	k           K
+	v           V
 	isBlack     bool
 	nodeType    lrbtNodeType
-	left        *lrbtNode
-	right       *lrbtNode
-	parent      *lrbtNode
-	prev        *lrbtNode
-	next        *lrbtNode
-	orderedPrev *lrbtNode
-	orderedNext *lrbtNode
+	left        *lrbtNode[K, V]
+	right       *lrbtNode[K, V]
+	parent      *lrbtNode[K, V]
+	prev        *lrbtNode[K, V]
+	next        *lrbtNode[K, V]
+	orderedPrev *lrbtNode[K, V]
+	orderedNext *lrbtNode[K, V]
 }
 
-func (node *lrbtNode) sibling() *lrbtNode {
+func (node *lrbtNode[K, V]) sibling() *lrbtNode[K, V] {
 	if node.parent != nil {
 		if node.isLeftChild() {
 			return node.parent.right
@@ -696,31 +708,31 @@ func (node *lrbtNode) sibling() *lrbtNode {
 	return nil
 }
 
-func (node *lrbtNode) rightmostChild() *lrbtNode {
+func (node *lrbtNode[K, V]) rightmostChild() *lrbtNode[K, V] {
 	for node.right != nil {
 		node = node.right
 	}
 	return node
 }
 
-func (node *lrbtNode) leftmostChild() *lrbtNode {
+func (node *lrbtNode[K, V]) leftmostChild() *lrbtNode[K, V] {
 	for node.left != nil {
 		node = node.left
 	}
 	return node
 }
 
-func (node *lrbtNode) isBlackNode() bool {
+func (node *lrbtNode[K, V]) isBlackNode() bool {
 	if node != nil {
 		return node.isBlack
 	}
 	return true
 }
 
-func (node *lrbtNode) isLeftChild() bool {
+func (node *lrbtNode[K, V]) isLeftChild() bool {
 	return node.nodeType == kLRBTNodeTypeLeftChild
 }
 
-func (node *lrbtNode) isRightChild() bool {
+func (node *lrbtNode[K, V]) isRightChild() bool {
 	return node.nodeType == kLRBTNodeTypeRightChild
 }
