@@ -1,4 +1,24 @@
-// Package ftp_pool implements a ftp pool base on "github.com/jlaffaye/ftp"
+/*
+ *
+ * ftp_pool - FTP client connection pool.
+ * Copyright (C) 2018 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+// Package ftp_pool implements a ftp pool based on "github.com/jlaffaye/ftp"
 package ftp_pool
 
 import (
@@ -25,17 +45,17 @@ type FTPPool struct {
 
 // NewFTPPool is the only way to get a new, ready-to-use FTPPool object.
 //
-//   addr: ftp address
-//   user: ftp username
-//   passwd: ftp password
-//   maxCachedConn: Max pooled ftp connections
-//   connLimit: Max ftp connections
+//	addr: ftp address
+//	user: ftp username
+//	passwd: ftp password
+//	maxCachedConn: Max pooled ftp connections
+//	connLimit: Max ftp connections
 //
 // Example:
 //
-//   ftpPool := NewFTPPool(Addr, User, Passwd, 10, 100)
-//   ftpConn, _ := ftpPool.Get() // Gets an ftp connection from the pool, or creates a new one if the pool is empty
-//   ftpPool.Put(ftpConn, false) // Puts an ftp connection back to the pool
+//	ftpPool := NewFTPPool(Addr, User, Passwd, 10, 100)
+//	ftpConn, _ := ftpPool.Get() // Gets an ftp connection from the pool, or creates a new one if the pool is empty
+//	ftpPool.Put(ftpConn, false) // Puts an ftp connection back to the pool
 func NewFTPPool(addr, user, passwd string, maxCachedConn, connLimit int) *FTPPool {
 	pool := &FTPPool{
 		cond:         sync.NewCond(new(sync.Mutex)),
@@ -105,8 +125,8 @@ func (pool *FTPPool) Get() (conn *ftp.ServerConn, err error) {
 
 // Put returns an ftp connection to the pool. If MaxCachedConn had been reached, the connection will be discarded.
 //
-//   conn: ftp connection to be returned
-//   forceFree: the connection will be discarded anyway if true is passed
+//	conn: ftp connection to be returned
+//	forceFree: the connection will be discarded anyway if true is passed
 func (pool *FTPPool) Put(conn *ftp.ServerConn, forceFree bool) {
 	pool.cond.L.Lock()
 	if !forceFree && pool.freeList.Len() < pool.maxCachedNum {

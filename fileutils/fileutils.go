@@ -23,6 +23,7 @@ package fileutils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -53,12 +54,17 @@ func CopyDirectory(src, dst string) error {
 		dstPath := filepath.Join(dst, entry.Name())
 
 		if !entry.IsDir() {
-			cont, err := os.ReadFile(srcPath)
+			srcFile, err := os.Open(srcPath)
 			if err != nil {
 				return err
 			}
 
-			err = os.WriteFile(dstPath, cont, entry.Type())
+			dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, entry.Type())
+			if err != nil {
+				return err
+			}
+
+			_, err = io.Copy(dstFile, srcFile)
 			if err != nil {
 				return err
 			}
