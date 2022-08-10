@@ -10,17 +10,9 @@ Package [logger](./logger) is a goroutine-safe logging facility which writes log
 
 Package [sync](./sync) provides extra synchronization facilities such as semaphore in addition to the standard sync package.
 
-# cache
-
-Implements an LRU cache.
-
-# concurrent
-
-Package concurrent provides some goroutine-safe containers.
-
 # container
 
-Package container offers some goroutine-unsafe containers.
+Package [container](./container) provides some goroutine-unsafe containers and some goroutine-safe containers (under the container/concurrent folder).
 
 # fileutils
 
