@@ -1,20 +1,22 @@
 /*
-	Copyright 2020 Antigloss
-
-	This library is free software; you can redistribute it and/or
-	modify it under the terms of the GNU Lesser General Public
-	License as published by the Free Software Foundation; either
-	version 3 of the License, or (at your option) any later version.
-
-	This library is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-	Lesser General Public License for more details.
-
-	You should have received a copy of the GNU Lesser General Public
-	License along with this library; if not, write to the Free Software
-	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
-*/
+ *
+ * logger - A package for writing logs
+ * Copyright (C) 2020 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 package logger
 
@@ -194,12 +196,12 @@ func Fatalf(format string, args ...interface{}) {
 // Logger can be used to write logs with different severity levels to files, console, or both.
 // Logs with different severity levels are written to different files. It is goroutine-safe and supports the following features:
 //
-//   1. Auto rotation: It'll create a new logfile whenever day changes or size of the current logfile exceeds the configured size limit.
-//   2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
-//   3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
-//   4. Log levels: 6 different levels are supported. Logs with different levels are written to different logfiles. By setting the Logger object to a higher log level, lower level logs will be filtered out.
-//   5. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
-//   6. It'll create symlinks that link to the most current logfiles.
+//  1. Auto rotation: It'll create a new logfile whenever day changes or size of the current logfile exceeds the configured size limit.
+//  2. Auto purging: It'll delete some oldest logfiles whenever the number of logfiles exceeds the configured limit.
+//  3. Log-through: Logs with higher severity level will be written to all the logfiles with lower severity level.
+//  4. Log levels: 6 different levels are supported. Logs with different levels are written to different logfiles. By setting the Logger object to a higher log level, lower level logs will be filtered out.
+//  5. Logs are not buffered, they are written to logfiles immediately with os.(*File).Write().
+//  6. It'll create symlinks that link to the most current logfiles.
 type Logger struct {
 	// Variables not allowed to be changed at runtime go here
 	logDir         string

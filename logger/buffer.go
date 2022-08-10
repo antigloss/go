@@ -1,5 +1,3 @@
-// Author: https://github.com/antigloss
-
 package logger
 
 import (
