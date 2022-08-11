@@ -18,6 +18,7 @@
  *
  */
 
+// Package pool provides some goroutine-safe object pools such as ObjectPool.
 package pool
 
 import (
@@ -54,7 +55,6 @@ func NewObjectPool[T any](maxObjectNum int, createObj CreateFunc[T], clearObj Cl
 }
 
 // ObjectPool is a goroutine-safe generic pool for objects of any type.
-// It performs about 36% slower than the other specialized object pools such as BufferPool.
 type ObjectPool[T any] struct {
 	lock       sync.Mutex
 	freeList   *object[T]

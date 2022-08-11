@@ -1,4 +1,22 @@
-// Author: https://github.com/antigloss
+/*
+ *
+ * pool - Goroutine-safe object pools.
+ * Copyright (C) 2016 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 package pool
 
@@ -12,12 +30,12 @@ import (
 // or the like to obtain a GoRoutinePool, it'll still work,
 // but it won't pool even a single goroutine.
 //
-//   maxGoRoutineNum: Maximum number of goroutines that will be pooled in GoRoutinePool
+//	maxGoRoutineNum: Maximum number of goroutines that will be pooled in GoRoutinePool
 //
 // Example:
 //
-//   goPool := pool.NewGoRoutinePool(100)
-//   goPool.Run(func(){ fmt.Println("Hello, GoRoutinePool!") }) // runs a function using a pooled goroutine
+//	goPool := pool.NewGoRoutinePool(100)
+//	goPool.Run(func(){ fmt.Println("Hello, GoRoutinePool!") }) // runs a function using a pooled goroutine
 func NewGoRoutinePool(maxGoRoutineNum int) *GoRoutinePool {
 	return &GoRoutinePool{maxNum: maxGoRoutineNum}
 }
