@@ -1,4 +1,22 @@
-// Author: https://github.com/antigloss
+/*
+ *
+ * mux - Connection multiplexer.
+ * Copyright (C) 2016 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
 // Package mux (short for connection multiplexer) is a multiplexing package for Golang.
 //
@@ -11,11 +29,11 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"time"
-
 	"sync"
 	"sync/atomic"
-	"unsafe"
+	"time"
+
+	"github.com/antigloss/go/container/concurrent/queue"
 )
 
 const (
@@ -23,7 +41,7 @@ const (
 	kSimpleMuxMaxHeaderSz = 1024
 )
 
-// SimpleMuxHeader
+// SimpleMuxHeader defines the interface that a real PacketHeader should satisfy
 type SimpleMuxHeader interface {
 	SessionID() uint64
 	BodyLen() int64
@@ -37,22 +55,22 @@ type Packet struct {
 
 // NewSimpleMux is the only way to get a new, ready-to-use SimpleMux.
 //
-//   conn: Connection to the remote server. Once a connection has been assigned to a SimpleMux,
-//         you should never use it elsewhere, otherwise it might cause the SimpleMux to malfunction.
-//   hdrSz: Size (in bytes) of protocol header for communicating with the remote server.
-//   hdrParser: Function to parser the header. Returns (hdr, nil) on success, or (nil, err) on error.
-//   defHandler: Handler function for handling packets without an associated session. Could be nil.
-//               `defSess` is the default session for sending information back to the remote server if necessary.
-//                        Do not close this `defSess`, otherwise you can't use it later.
-//               `packet` is the current packet received whose associated session could not be found.
+//	conn: Connection to the remote server. Once a connection has been assigned to a SimpleMux,
+//	      you should never use it elsewhere, otherwise it might cause the SimpleMux to malfunction.
+//	hdrSz: Size (in bytes) of protocol header for communicating with the remote server.
+//	hdrParser: Function to parser the header. Returns (hdr, nil) on success, or (nil, err) on error.
+//	defHandler: Handler for handling packets without an associated session. Could be nil.
+//	            `defSess` is the default session for sending information back to the remote server if necessary.
+//	                     Do not close this `defSess`, otherwise you can't use it later.
+//	            `packet` is the current packet received whose associated session could not be found.
 func NewSimpleMux(conn net.Conn, hdrSz int,
 	hdrParser func(hdr []byte) (SimpleMuxHeader, error),
 	defHandler func(defSess *Session, packet *Packet)) (*SimpleMux, error) {
 	if hdrSz < kSimpleMuxMinHeaderSz || hdrSz > kSimpleMuxMaxHeaderSz {
-		return nil, fmt.Errorf("`hdrSz` should be [%d, %d].", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
+		return nil, fmt.Errorf("`hdrSz` should be [%d, %d]", kSimpleMuxMinHeaderSz, kSimpleMuxMaxHeaderSz)
 	}
 	if hdrParser == nil {
-		return nil, fmt.Errorf("`hdrParser` must not be nil!")
+		return nil, fmt.Errorf("`hdrParser` must not be nil")
 	}
 
 	mux := &SimpleMux{
@@ -63,7 +81,7 @@ func NewSimpleMux(conn net.Conn, hdrSz int,
 	}
 	if defHandler != nil {
 		mux.defHandler = defHandler
-		mux.defPacketQ = newPacketQueue()
+		mux.defPacketQ = queue.NewLockfreeQueue[*Packet]()
 		mux.defNotiChnl = make(chan bool, 1)
 		mux.defQuitChnl = make(chan bool, 1)
 		go mux.procNonSessionPackets()
@@ -75,11 +93,11 @@ func NewSimpleMux(conn net.Conn, hdrSz int,
 
 // SimpleMux is a connection multiplexer. It is very useful when under the following constraints:
 //
-//   1. Can only open a few connections (probably only 1 connection) to a remote server,
-//       but want to program like there can be unlimited connections.
-//   2. The remote server has its own protocol format which could not be changed.
-//   3. Fortunately, we can set 8 bytes of information to the protocol header which
-//       will remain the same in the server's response.
+//  1. Can only open a few connections (probably only 1 connection) to a remote server,
+//     but want to program like there can be unlimited connections.
+//  2. The remote server has its own protocol format which could not be changed.
+//  3. Fortunately, we can set 8 bytes of information to the protocol header which
+//     will remain the same in the server's response.
 //
 // All methods of SimpleMux are goroutine-safe.
 //
@@ -92,19 +110,19 @@ type SimpleMux struct {
 	nextSessID  uint32
 	sessLock    sync.RWMutex
 	allSess     map[uint64]*Session
-	defHandler  func(*Session, *Packet) // defHandler will be invoke if session not found
-	defPacketQ  *packetQueue            // Non-session-packets will be pushed into it for defHandler
-	defNotiChnl chan bool               // Notify defHandler that there is incoming non-session-packet
-	defQuitChnl chan bool               // Notify defHandler to quit
+	defHandler  func(*Session, *Packet)       // defHandler will be invoke if session not found
+	defPacketQ  *queue.LockfreeQueue[*Packet] // Non-session-packets will be pushed into it for defHandler
+	defNotiChnl chan bool                     // Notify defHandler that there is incoming non-session-packet
+	defQuitChnl chan bool                     // Notify defHandler to quit
 }
 
 // NewSession is used to create a new session.
 // You can create as many sessions as you want.
-// All sessions are base on the single connecions of the SimpleMux,
+// All sessions are base on the single connection of the SimpleMux,
 // but they act like they are separate connections.
 //
-//   Note: Methods of Session are not goroutine-safe.
-//         One session is intended to be used within one goroutine.
+//	Note: Methods of Session are not goroutine-safe.
+//	      One session is intended to be used within one goroutine.
 func (mux *SimpleMux) NewSession() (sess *Session, err error) {
 	id := mux.getNextSessID()
 	sess = newSession(id, mux)
@@ -132,7 +150,7 @@ func (mux *SimpleMux) RemoteAddr() net.Addr {
 // Close is used to close the SimpleMux (including its underlying connection)
 // and all sessions.
 //
-//   Note: After finish using a SimpleMux, Close must be called to release resources.
+//	Note: After finish using a SimpleMux, Close must be called to release resources.
 func (mux *SimpleMux) Close() {
 	mux.close(kSimpleMuxClosed)
 }
@@ -169,11 +187,11 @@ func (mux *SimpleMux) loop() {
 		sess := mux.allSess[muxHdr.SessionID()]
 		mux.sessLock.RUnlock()
 		if sess != nil {
-			sess.packets.push(packet)
+			sess.packets.Push(packet)
 			asyncNotify(sess.packetNoti)
 		} else {
 			if mux.defHandler != nil {
-				mux.defPacketQ.push(packet)
+				mux.defPacketQ.Push(packet)
 				asyncNotify(mux.defNotiChnl)
 			}
 		}
@@ -187,7 +205,7 @@ func (mux *SimpleMux) procNonSessionPackets() {
 	var closed bool
 	var packet *Packet
 	for {
-		packet = mux.defPacketQ.pop()
+		packet, _ = mux.defPacketQ.Pop()
 		if packet != nil {
 			mux.defHandler(defSess, packet)
 		} else {
@@ -232,7 +250,7 @@ func (mux *SimpleMux) getNextSessID() uint64 {
 	for baseID == 0 {
 		baseID = atomic.AddUint32(&(mux.nextSessID), 1)
 	}
-	return ((uint64(time.Now().Unix()) << 32) | uint64(baseID))
+	return (uint64(time.Now().Unix()) << 32) | uint64(baseID)
 }
 
 func asyncNotify(ch chan bool) {
@@ -249,7 +267,7 @@ func asyncNotifyError(ch chan error, err error) {
 	}
 }
 
-var kSimpleMuxClosed = fmt.Errorf("This SimpleMux object has already been closed.")
+var kSimpleMuxClosed = fmt.Errorf("this SimpleMux object has already been closed")
 
 //------------------------------------------------------------------
 // Session
@@ -259,24 +277,24 @@ func newSession(id uint64, mux *SimpleMux) *Session {
 	return &Session{
 		id:         id,
 		mux:        mux,
-		packets:    newPacketQueue(),
+		packets:    queue.NewLockfreeQueue[*Packet](),
 		packetNoti: make(chan bool, 1),
 		err:        make(chan error, 1),
 	}
 }
 
 // Session is created from a SimpleMux. You can create as many sessions as you want.
-// All sessions are base on the single connecions of the SimpleMux,
+// All sessions are base on the single connection of the SimpleMux,
 // but they act like they are separate connections.
 //
-// Session supports bi-directional communication and server-side push.
+// Session supports bidirectional communication and server-side push.
 //
-//   Note: Methods of Session are not goroutine-safe.
-//         One session is intended to be used within one goroutine.
+//	Note: Methods of Session are not goroutine-safe.
+//	      One session is intended to be used within one goroutine.
 type Session struct {
 	id         uint64
 	mux        *SimpleMux
-	packets    *packetQueue
+	packets    *queue.LockfreeQueue[*Packet]
 	rdTimeout  time.Duration
 	packetNoti chan bool
 	err        chan error
@@ -288,7 +306,7 @@ func (sess *Session) ID() uint64 {
 }
 
 // Send is used to write to the session.
-// For some good reasons, Send dosen't support timeout.
+// For some good reasons, Send doesn't support timeout.
 func (sess *Session) Send(b []byte) (int, error) {
 	if sess.mux != nil {
 		return sess.mux.conn.Write(b)
@@ -301,7 +319,7 @@ func (sess *Session) Send(b []byte) (int, error) {
 // to determine if timeout occurs.
 func (sess *Session) Recv() (packet *Packet, err error) {
 	for {
-		packet = sess.packets.pop()
+		packet, _ = sess.packets.Pop()
 		if packet != nil {
 			return
 		}
@@ -330,12 +348,12 @@ func (sess *Session) Recv() (packet *Packet, err error) {
 
 // SetRecvTimeout sets timeout to the session.
 // After calling this method, all subsequent calls to Recv() will
-// timeout after the specified `timeout`.
+// time out after the specified `timeout`.
 //
 // Should you want to cancel the timeout setting, just call SetRecvTimeout(0)
 //
-//   Example:
-//       sess.SetRecvTimeout(5 * time.Millisecond)
+//	Example:
+//	    sess.SetRecvTimeout(5 * time.Millisecond)
 func (sess *Session) SetRecvTimeout(timeout time.Duration) {
 	sess.rdTimeout = timeout
 }
@@ -373,63 +391,5 @@ func (e timeoutError) Temporary() bool {
 	return true
 }
 
-var kSessionClosed = fmt.Errorf("This session has already been closed.")
-var kSessionRdTimeout = timeoutError("This session has already been closed.")
-
-//--------------------------------------------------------
-// packetQueue
-//--------------------------------------------------------
-
-func newPacketQueue() *packetQueue {
-	var pq packetQueue
-	pq.head = unsafe.Pointer(&pq.dummy)
-	pq.tail = pq.head
-	return &pq
-}
-
-// packetQueue is a goroutine-safe Queue implementation.
-// The overall performance of packetQueue is much better than List+Mutex(standard package).
-type packetQueue struct {
-	head  unsafe.Pointer
-	tail  unsafe.Pointer
-	dummy packetNode
-}
-
-func (pq *packetQueue) pop() *Packet {
-	for {
-		h := atomic.LoadPointer(&pq.head)
-		rh := (*packetNode)(h)
-		n := (*packetNode)(atomic.LoadPointer(&rh.next))
-		if n != nil {
-			if atomic.CompareAndSwapPointer(&pq.head, h, rh.next) {
-				return n.val
-			} else {
-				continue
-			}
-		} else {
-			return nil
-		}
-	}
-}
-
-func (pq *packetQueue) push(val *Packet) {
-	node := unsafe.Pointer(&packetNode{val: val})
-	for {
-		t := atomic.LoadPointer(&pq.tail)
-		rt := (*packetNode)(t)
-		if atomic.CompareAndSwapPointer(&rt.next, nil, node) {
-			// It'll be a dead loop if atomic.StorePointer() is used.
-			// Don't know why.
-			// atomic.StorePointer(&lfq.tail, node)
-			atomic.CompareAndSwapPointer(&pq.tail, t, node)
-			return
-		} else {
-			continue
-		}
-	}
-}
-
-type packetNode struct {
-	val  *Packet
-	next unsafe.Pointer
-}
+var kSessionClosed = fmt.Errorf("this session has already been closed")
+var kSessionRdTimeout = timeoutError("this session has already been closed")

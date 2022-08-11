@@ -1,3 +1,23 @@
+/*
+ *
+ * mux - Connection multiplexer.
+ * Copyright (C) 2016 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package mux
 
 import (
@@ -17,7 +37,6 @@ var out *testing.T
 const (
 	kGoroutineNum = 10
 	kSendTimes    = 10000
-	kLoopTimes    = kGoroutineNum * kSendTimes
 )
 
 func TestSimpleMux(t *testing.T) {
@@ -44,7 +63,7 @@ func TestSimpleMux(t *testing.T) {
 	simpleMux, _ := NewSimpleMux(conn, 12, hdrParser, defHandler)
 	wg.Add(kGoroutineNum)
 	for i := 0; i != kGoroutineNum; i++ {
-		go test(simpleMux, i)
+		go test(simpleMux)
 	}
 	wg.Wait()
 
@@ -73,7 +92,7 @@ func TestSimpleMux(t *testing.T) {
 	simpleMux.Close()
 }
 
-func test(simpleMux *SimpleMux, n int) {
+func test(simpleMux *SimpleMux) {
 	sess, _ := simpleMux.NewSession()
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.BigEndian, Header{Len: 4, ID: sess.ID()})
@@ -123,6 +142,6 @@ func hdrParser(hdr []byte) (SimpleMuxHeader, error) {
 
 var gHdlrCallTimes int
 
-func defHandler(defSess *Session, packet *Packet) {
+func defHandler(*Session, *Packet) {
 	gHdlrCallTimes++
 }
