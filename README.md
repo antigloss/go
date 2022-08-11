@@ -16,20 +16,16 @@ Package [container](./container) provides some goroutine-unsafe containers and s
 
 # fileutils
 
-Package fileutils provides some handy file utilities.
+Package [fileutils](./fileutils) provides some handy file utilities.
 
 # iap
 
-A go implementation for verifying In App Purchases (compatible with iOS6 and iOS7 response) via apple.
+A go implementation for verifying In-App Purchases (compatible with iOS6 and iOS7 response) via apple.
 
 # net
 
-Package inet provides some handy utilities for network programming.
-
-# pool
-
-Package pool offers goroutine-safe object pools such as ObjectPool and BufferPool.
+Package [net](./net) provides some handy utilities for network programming.
 
 # utils
 
-Package utils packs with many useful handy utilities.
+Package [utils](./utils) packs with many useful handy utilities.

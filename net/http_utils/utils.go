@@ -18,6 +18,7 @@
  *
  */
 
+// Package http_utils provides some handy http utilities.
 package http_utils
 
 import (
