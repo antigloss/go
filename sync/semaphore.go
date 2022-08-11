@@ -1,24 +1,24 @@
 /*
-	Copyright 2020 Antigloss
+ *
+ * sync - Synchronization facilities.
+ * Copyright (C) 2019 Antigloss Huang (https://github.com/antigloss) All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 
-	This library is free software; you can redistribute it and/or
-	modify it under the terms of the GNU Lesser General Public
-	License as published by the Free Software Foundation; either
-	version 3 of the License, or (at your option) any later version.
-
-	This library is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-	Lesser General Public License for more details.
-
-	You should have received a copy of the GNU Lesser General Public
-	License along with this library; if not, write to the Free Software
-	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
-*/
-
-/*
-	Package sync provides extra synchronization facilities such as semaphore in addition to the standard sync package.
-*/
+// Package sync provides extra synchronization facilities such as semaphore in addition to the standard sync package.
 package sync
 
 import (
@@ -36,8 +36,8 @@ type SemaphoreResource struct {
 
 // Release releases resources acquired from a Semaphore object.
 func (sr *SemaphoreResource) Release() {
-	var new unsafe.Pointer
-	old := atomic.SwapPointer(&sr.sema, new)
+	var newVal unsafe.Pointer
+	old := atomic.SwapPointer(&sr.sema, newVal)
 	if old != nil {
 		(*Semaphore)(old).release()
 	}
@@ -45,6 +45,7 @@ func (sr *SemaphoreResource) Release() {
 
 // Semaphore is a mimic of the POSIX semaphore based on channel and sync.Mutex. It could be used to limit the number of concurrent running goroutines.
 // Basic example:
+//
 //	// Creates a ready-to-use semaphore
 //	sema := concurrent.NewSemaphore(InitValue)
 //	// Decrements the semaphore, blocks if value of the semaphore is less than 1
@@ -59,7 +60,8 @@ type Semaphore struct {
 }
 
 // NewSemaphore creates a ready-to-use Semaphore.
-//   value: Initial value of the Semaphore.
+//
+//	value: Initial value of the Semaphore.
 func NewSemaphore(value int) *Semaphore {
 	return &Semaphore{value: value}
 }
