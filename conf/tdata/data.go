@@ -17,6 +17,7 @@
  *
  */
 
+// Package tdata implements TemplateData from which data can be used to replace templates from other Stores.
 package tdata
 
 import (
@@ -28,11 +29,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-// New 创建 TemplateData 对象。支持了 3 个自定义函数：
+// New creates a TemplateData object which supports the following user-defined functions:
 //
-//   - env KEY      替换为环境变量 KEY 的值
-//   - hostname     替换为 hostname
-//   - value KEY    替换为 Store 中和 KEY 同名的值
+//   - env KEY      replace `env KEY` with the value of `KEY` read from ENV
+//   - hostname     replace `hostname` with the value of os.Hostname()
+//   - value KEY    replace `value KEY` with the value of `KEY` read from Stores assigned to the TemplateData object
 func New(opts ...option) (TemplateData, error) {
 	t := &templateData{viper: viper.New()}
 	t.opts.apply(opts...)
@@ -55,9 +56,9 @@ func New(opts ...option) (TemplateData, error) {
 	return t, nil
 }
 
-// TemplateData 为配置中的模板参数（text/template）提供替换数据
+// TemplateData provides data for replacing templates
 type TemplateData interface {
-	Replace(tpl []byte) ([]byte, error) // 用 TemplateData 中的数据，替换 tpl 中的模板参数
+	Replace(tpl []byte) ([]byte, error) // use data from TemplateData to replace templates in `tpl`
 }
 
 type templateData struct {
@@ -65,7 +66,7 @@ type templateData struct {
 	viper *viper.Viper
 }
 
-// Replace 用 templateData 中的数据，替换 tpl 中的模板参数
+// Replace uses data from TemplateData to replace templates in `tpl`
 func (t *templateData) Replace(tpl []byte) ([]byte, error) {
 	tp := template.New("")
 	tp.Funcs(map[string]any{

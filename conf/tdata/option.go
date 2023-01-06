@@ -21,7 +21,7 @@ package tdata
 
 import "github.com/antigloss/go/conf/store"
 
-// WithStores 设置 TemplateData 的配置数据来源
+// WithStores sets Stores from which data is read into TemplateData
 func WithStores(stores ...store.Store) option {
 	return func(o *options) {
 		o.stores = stores
