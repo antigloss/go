@@ -28,7 +28,7 @@ import (
 	"github.com/antigloss/go/conf/store"
 )
 
-// New 创建从指定文件中读取配置的 Store 对象。
+// New creates a Store object to read configurations from local files
 func New(opts ...option) store.Store {
 	a := &fileStore{}
 	a.opts.apply(opts...)
@@ -39,7 +39,7 @@ type fileStore struct {
 	opts options
 }
 
-// Load 加载配置
+// Load reads configurations
 func (a *fileStore) Load() ([]store.ConfigContent, error) {
 	paths, err := a.calculateFilePaths()
 	if err != nil {
@@ -68,12 +68,12 @@ func (a *fileStore) Load() ([]store.ConfigContent, error) {
 	return contents, nil
 }
 
-// Watch 监听配置变化。暂时不支持该操作，直接返回 nil
+// Watch watches configuration changes. Not yet supported
 func (a *fileStore) Watch(ch chan<- *store.ConfigChanges) error {
 	return nil
 }
 
-// Unwatch 取消监听
+// Unwatch stops watching
 func (a *fileStore) Unwatch() {
 }
 

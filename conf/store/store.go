@@ -19,20 +19,20 @@
 
 package store
 
-// Store 配置存储
+// Store is the interface from which configurations can be read and watched
 type Store interface {
-	Load() ([]ConfigContent, error)       // 加载配置
-	Watch(ch chan<- *ConfigChanges) error // 监听配置变化
-	Unwatch()                             // 取消监听
+	Load() ([]ConfigContent, error)       // read configurations
+	Watch(ch chan<- *ConfigChanges) error // watch configuration changes
+	Unwatch()                             // stop watching
 }
 
-// ConfigContent 从 Store 中读取到的配置内容
+// ConfigContent configuration content read from a Store object
 type ConfigContent struct {
-	Type    string // 配置类型：json、yaml、properties 等等
-	Content []byte // 配置内容
+	Type    string // configuration format: json, yaml, properties...
+	Content []byte // configuration content
 }
 
-// ChangeType 配置项变化类型
+// ChangeType is the change type of configuration
 type ChangeType int
 
 const (
@@ -41,13 +41,13 @@ const (
 	ChangeTypeDeleted        // 删除配置项
 )
 
-// ConfigChange 配置项的变化
+// ConfigChange change of configuration
 type ConfigChange struct {
 	Type ChangeType // 变化类型
 	Key  string     // 变化的配置项
 }
 
-// ConfigChanges 配置的变化
+// ConfigChanges changes of configurations
 type ConfigChanges struct {
 	Config  ConfigContent  // 配置内容
 	Changes []ConfigChange // 配置项的变化

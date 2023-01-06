@@ -21,7 +21,8 @@ package env
 
 import "github.com/antigloss/go/conf/tdata"
 
-// WithTemplateData 开启模板替换功能，使用 tData 替换配置中的模板参数
+// WithTemplateData sets template data source.
+// Will use configurations from `tData` to replace templates in the configurations from ENV
 func WithTemplateData(tData tdata.TemplateData) option {
 	return func(o *options) {
 		o.tData = tData

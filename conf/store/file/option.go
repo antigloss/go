@@ -21,20 +21,21 @@ package file
 
 import "github.com/antigloss/go/conf/tdata"
 
-// ConfigPath 配置文件路径
+// ConfigPath holds path to the local configuration file/directory
 type ConfigPath struct {
-	Path      string // 配置文件路径，可以是具体的文件，也可以是目录。如果路径是目录，则会读取目录下的所有文件（不包括 . 开头的文件）
-	Recursive bool   // true 表示递归读取所有子目录的文件，false 则只读取 Path 指定目录的文件
+	Path      string // path to the local configuration file/directory. If it's a directory, then all files under the directory will also be read, excluding those start with a dot (.)
+	Recursive bool   // true for reading files under `Path` recursively, false for reading only the files right under directory `Path`
 }
 
-// WithConfigPaths 设置配置文件路径。如果路径是目录，则会读取目录下的所有文件（不包括 . 开头的文件）
+// WithConfigPaths sets paths to local configuration files
 func WithConfigPaths(paths ...ConfigPath) option {
 	return func(o *options) {
 		o.paths = paths
 	}
 }
 
-// WithTemplateData 开启模板替换功能，使用 tData 替换配置中的模板参数
+// WithTemplateData sets template data source.
+// Will use configurations from `tData` to replace templates in the configurations from local files
 func WithTemplateData(tData tdata.TemplateData) option {
 	return func(o *options) {
 		o.tData = tData

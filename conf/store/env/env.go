@@ -27,7 +27,7 @@ import (
 	"github.com/antigloss/go/conf/store"
 )
 
-// New 创建从 os.Environ() 读取配置的 Store 对象。
+// New creates a Store object to read configurations from os.Environ()
 func New(opts ...option) store.Store {
 	a := &envStore{}
 	a.opts.apply(opts...)
@@ -38,7 +38,7 @@ type envStore struct {
 	opts options
 }
 
-// Load 加载配置
+// Load reads configurations
 func (a *envStore) Load() ([]store.ConfigContent, error) {
 	buf := bytes.NewBuffer(nil)
 	for _, env := range os.Environ() {
@@ -60,11 +60,11 @@ func (a *envStore) Load() ([]store.ConfigContent, error) {
 	return contents, nil
 }
 
-// Watch 监听配置变化。暂时不支持该操作，直接返回 nil
+// Watch watches configuration changes. Not yet supported
 func (a *envStore) Watch(ch chan<- *store.ConfigChanges) error {
 	return nil
 }
 
-// Unwatch 取消监听
+// Unwatch stops watching
 func (a *envStore) Unwatch() {
 }

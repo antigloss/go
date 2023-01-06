@@ -27,16 +27,16 @@ import (
 )
 
 const (
-	ConfigTypeDefault = "properties" // 默认配置格式
+	ConfigTypeDefault = "properties" // default format
 	ConfigTypeJSON    = "json"       // JSON
 	ConfigTypeYAML    = "yaml"       // YAML
 	ConfigTypeYML     = "yml"        // YAML
-	ConfigTypeEnv     = "env"        // 环境变量
+	ConfigTypeEnv     = "env"        // environment
 )
 
-// ConfigType 使用文件名后缀作为配置格式，如：properties、xml、yml、yaml、json 等。
-//   - 如果没有后缀名，则默认为 properties
-//   - 如果不支持后缀名指定的配置格式，则返回 error
+// ConfigType uses file extension as configuration format, such as properties, xml, yml, yaml, json...
+//   - If extension is missing, default is `properties`
+//   - If extension is not supported, error is returned
 func ConfigType(filename string) (string, error) {
 	ext := filepath.Ext(filename)
 	if len(ext) > 1 {
