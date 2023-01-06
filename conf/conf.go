@@ -44,9 +44,8 @@ func New[T any](opts ...option) *ConfigParser[T] {
 	return c
 }
 
-// ConfigParser configuration data parser. It supports variety of configuration Stores, mainstream configuration formats, watching, and templates
-//
-//	T - struct for unmarshalling configuration data
+// ConfigParser is a configuration data parser. It supports variety of configuration Stores, mainstream configuration formats, watching, and templates
+//   - `T` is the struct for unmarshalling configuration data
 type ConfigParser[T any] struct {
 	opts      options
 	viper     *viper.Viper

@@ -27,7 +27,7 @@ type Store interface {
 	Unwatch()                             // stop watching
 }
 
-// ConfigContent configuration content read from a Store object
+// ConfigContent is the configuration content read from a Store object
 type ConfigContent struct {
 	Type    string // configuration format: json, yaml, properties...
 	Content []byte // configuration content
@@ -37,19 +37,19 @@ type ConfigContent struct {
 type ChangeType int
 
 const (
-	ChangeTypeAdded   = iota // 新增配置项
-	ChangeTypeUpdated        // 修改配置项
-	ChangeTypeDeleted        // 删除配置项
+	ChangeTypeAdded   = iota // configuration added
+	ChangeTypeUpdated        // configuration updated
+	ChangeTypeDeleted        // configuration deleted
 )
 
 // ConfigChange change of configuration
 type ConfigChange struct {
-	Type ChangeType // 变化类型
-	Key  string     // 变化的配置项
+	Type ChangeType
+	Key  string // key of the changed configuration
 }
 
 // ConfigChanges changes of configurations
 type ConfigChanges struct {
-	Config  ConfigContent  // 配置内容
-	Changes []ConfigChange // 配置项的变化
+	Config  ConfigContent
+	Changes []ConfigChange
 }
