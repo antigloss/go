@@ -1,6 +1,6 @@
 # Overview
 
-Package [conf](./conf) is a framework for reading configurations from variety of configuration stores, such as ENV, files, or Apollo.
+Package `conf` is a framework for reading configurations from variety of configuration stores, such as ENV, files, or Apollo.
 
 ## Supported Stores
 
@@ -22,4 +22,4 @@ Package [conf](./conf) is a framework for reading configurations from variety of
 
 ## Examples
 
-Please refer [HERE](./conf/examples) for examples.
+Please refer [HERE](./examples) for examples.
