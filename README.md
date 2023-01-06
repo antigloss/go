@@ -2,6 +2,32 @@
 
 Handy utilities written in golang
 
+# conf
+
+Package [conf](./conf) is a framework for reading configurations from variety of configuration stores, such as ENV, files, or Apollo.
+
+## Supported Stores
+
+- ENV
+- Local files
+- Apollo. Watching is also supported
+
+## Supported format
+
+- properties, props, prop
+- json
+- yaml, yml
+- toml
+- hcl
+- tfvars
+- ini
+- env
+- dotenv
+
+## Examples
+
+Please refer [HERE](./conf/examples) for examples.
+
 # logger
 
 Package [logger](./logger) is a goroutine-safe logging facility which writes logs with different severity levels to files, console, or both. Features: auto rotation of log files, auto deletion of old log files, and [more...](./logger)
