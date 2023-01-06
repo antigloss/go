@@ -8,7 +8,7 @@ Package [conf](./conf) is a framework for reading configurations from variety of
 - Local files
 - Apollo. Watching is also supported
 
-## Supported format
+## Supported Formats
 
 - properties, props, prop
 - json
