@@ -17,6 +17,7 @@
  *
  */
 
+// Package apollo implements a Apollo client for reading and watching configurations from Apollo.
 package apollo
 
 import (
@@ -30,14 +31,15 @@ import (
 	"github.com/antigloss/go/conf/store"
 )
 
-// New 创建从 Apollo 读取配置的 Store 对象。没有设置的 Apollo 参数，会默认通过环境变量获取。
+// New creates a Store object for reading and watching configurations from Apollo.
+// Unspecified Apollo client options could be read from ENV.
 //
-//	参数和环境变量的对应关系如下：
-//	  - URL:         APOLLO_META 。如果连环境变量中都没有，则默认为 http://apollo.meta
+//	Relations of Apollo client options and ENV keys:
+//	  - URL:         APOLLO_META . It not found in ENV, default is http://apollo.meta
 //	  - AppID:       APOLLO_APP_ID
-//	  - Cluster:     APOLLO_CLUSTER 。如果连环境变量中都没有，则默认为 default
-//	  - AccessKey:   先 APOLLO_ACCESS_KEY ，后 APOLLO_ACCESSKEY_SECRET ，取第一个非空值
-//	  - Namespaces:  APOLLO_NAMESPACE 。可使用逗号分割，配置多个 namespace ，如：ns1,ns2,ns3 。如果连环境变量中都没有，则默认为 application
+//	  - Cluster:     APOLLO_CLUSTER . It not found in ENV, default is `default`
+//	  - AccessKey:   APOLLO_ACCESS_KEY , if not found, then APOLLO_ACCESSKEY_SECRET
+//	  - Namespaces:  APOLLO_NAMESPACE . Comma separated. For example: ns1,ns2,ns3. It not found in ENV, default is `application`
 func New(opts ...option) store.Store {
 	a := &apolloStore{
 		unwatchCh: make(chan int),
@@ -53,7 +55,7 @@ type apolloStore struct {
 	unwatchCh chan int
 }
 
-// Load 加载配置
+// Load reads configurations from Apollo
 func (a *apolloStore) Load() ([]store.ConfigContent, error) {
 	err := a.opts.validate()
 	if err != nil {
@@ -106,7 +108,7 @@ func (a *apolloStore) Load() ([]store.ConfigContent, error) {
 	return contents, nil
 }
 
-// Watch 监听配置变化
+// Watch watches configuration changes from Apollo
 func (a *apolloStore) Watch(ch chan<- *store.ConfigChanges) error {
 	if !a.opts.watch {
 		return nil
@@ -158,7 +160,7 @@ func (a *apolloStore) Watch(ch chan<- *store.ConfigChanges) error {
 	return nil
 }
 
-// Unwatch 取消监听
+// Unwatch stops watching
 func (a *apolloStore) Unwatch() {
 	a.client.Stop()
 	close(a.unwatchCh)
@@ -196,7 +198,7 @@ func (a *apolloStore) confToContent(conf apollo.Configurations, ns, confType str
 }
 
 const (
-	bulkConfigKey = "content" // 配置为 json、yaml、xml 等格式时，key 固定为 content
+	bulkConfigKey = "content"
 )
 
 func propsToContent(conf map[string]interface{}) ([]byte, error) {

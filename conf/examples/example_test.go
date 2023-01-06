@@ -101,7 +101,7 @@ func ExampleConfFromApollo() {
 				apollo.WithAccessKey("ACCESS_KEY"),
 				apollo.WithNamespaces("NS1", "NS2"), // Set namespaces to read configurations from. Default is 'application'.
 				apollo.EnableWatch(),                // Enable watching for configuration changes. Default is 'disable'.
-				apollo.WithLocalConfig(l),           // Set LocalConfig to read Apollo Access Key from, and override configurations from other stores. No default LocalConfig.
+				apollo.WithLocalConfig(l),           // Set LocalConfig to read Apollo Access Key from, and override configurations from Apollo. No default LocalConfig.
 			),
 		),
 	)

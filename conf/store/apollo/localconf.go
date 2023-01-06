@@ -26,7 +26,8 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-// NewLocalConfig 读取本地配置，从中获取 Apollo 秘钥，并使用本地配置覆盖 Apollo 上的配置
+// NewLocalConfig creates a LocalConfig object to read Apollo Access Key from.
+// Configurations from LocalConfig will also be used to override configurations from Apollo
 func NewLocalConfig(o ...localOption) (*localConfig, error) {
 	var opts localOptions
 	opts.apply(o...)
@@ -47,7 +48,7 @@ func NewLocalConfig(o ...localOption) (*localConfig, error) {
 	return c, nil
 }
 
-// WithLocalConfigPath 设置本地配置覆盖文件的路径
+// WithLocalConfigPath sets path to the local configuration file. Default is `configs.yaml`
 func WithLocalConfigPath(path string) localOption {
 	return func(opts *localOptions) {
 		opts.cfgPath = path

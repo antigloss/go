@@ -26,56 +26,58 @@ import (
 	"github.com/antigloss/go/conf/tdata"
 )
 
-// WithURL 设置 Apollo 地址
+// WithURL sets Apollo URL
 func WithURL(url string) option {
 	return func(o *options) {
 		o.addr = url
 	}
 }
 
-// WithAppID 设置从哪个 AppID 读取配置
+// WithAppID sets AppID to read configurations from
 func WithAppID(id string) option {
 	return func(o *options) {
 		o.appID = id
 	}
 }
 
-// WithCluster 设置从哪个 Cluster 读取配置
+// WithCluster sets Cluster to read configurations from
 func WithCluster(cluster string) option {
 	return func(o *options) {
 		o.cluster = cluster
 	}
 }
 
-// WithAccessKey 设置 AccessKey
+// WithAccessKey sets Apollo Access Key
 func WithAccessKey(ak string) option {
 	return func(o *options) {
 		o.accessKey = ak
 	}
 }
 
-// WithNamespaces 设置从哪些 namespaces 读取配置
+// WithNamespaces sets namespaces to read configurations from
 func WithNamespaces(namespaces ...string) option {
 	return func(o *options) {
 		o.namespaces = namespaces
 	}
 }
 
-// WithTemplateData 开启模板替换功能，使用 tData 替换配置中的模板参数
+// WithTemplateData sets template data source.
+// Will use configurations from `tData` to replace templates in the configurations read from Apollo
 func WithTemplateData(tData tdata.TemplateData) option {
 	return func(o *options) {
 		o.tData = tData
 	}
 }
 
-// WithLocalConfig 设置本地配置，从中读取 Apollo 秘钥，并使用本地配置覆盖 Apollo 上的配置
+// WithLocalConfig sets LocalConfig to read Apollo Access Key from.
+// Will also use configurations from LocalConfig to override configurations read from Apollo
 func WithLocalConfig(cfg *localConfig) option {
 	return func(o *options) {
 		o.local = cfg
 	}
 }
 
-// EnableWatch 允许监听配置变化
+// EnableWatch enables watching configuration changes
 func EnableWatch() option {
 	return func(o *options) {
 		o.watch = true
@@ -83,7 +85,6 @@ func EnableWatch() option {
 }
 
 const (
-	// 默认从环境变量读取的值
 	envAddr       = "APOLLO_META"
 	envAppID      = "APOLLO_APP_ID"
 	envCluster    = "APOLLO_CLUSTER"
@@ -91,7 +92,6 @@ const (
 	envAccessKey2 = "APOLLO_ACCESSKEY_SECRET"
 	envNamespace  = "APOLLO_NAMESPACE"
 
-	// 默认值
 	defaultAddr      = "http://apollo.meta"
 	defaultCluster   = "default"
 	defaultNamespace = "application"
