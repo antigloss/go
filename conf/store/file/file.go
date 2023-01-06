@@ -17,6 +17,7 @@
  *
  */
 
+// Package file implements a Store client for reading and watching configurations from local files.
 package file
 
 import (

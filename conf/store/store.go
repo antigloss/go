@@ -17,6 +17,7 @@
  *
  */
 
+// Package store defines the Store interface, some common types and some common functions.
 package store
 
 // Store is the interface from which configurations can be read and watched

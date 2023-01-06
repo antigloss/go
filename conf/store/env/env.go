@@ -17,6 +17,7 @@
  *
  */
 
+// Package env implements a Store for reading and watching configurations from ENV.
 package env
 
 import (

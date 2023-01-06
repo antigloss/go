@@ -17,7 +17,7 @@
  *
  */
 
-// Package apollo implements a Apollo client for reading and watching configurations from Apollo.
+// Package apollo implements Store for reading and watching configurations from Apollo.
 package apollo
 
 import (
