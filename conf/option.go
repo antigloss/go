@@ -25,29 +25,30 @@ import (
 	"github.com/antigloss/go/conf/store"
 )
 
-// WithStores 设置 ConfigParser 的配置数据来源
+// WithStores sets Stores to ConfigParser
 func WithStores(stores ...store.Store) option {
 	return func(o *options) {
 		o.stores = stores
 	}
 }
 
-// WithTagName 设置把配置数据反序列化到结构体时，使用的 TagName ，默认是 mapstructure
+// WithTagName sets tag name used when unmarshalling data to the configuration struct. Default is mapstructure
 func WithTagName(tag string) option {
 	return func(o *options) {
 		o.tagName = tag
 	}
 }
 
-// DecodeHook 配置数据解码器
+// DecodeHook decoder for a specified data type
 type DecodeHook struct {
-	// 自定义数据类型
+	// Data type
 	Type reflect.Type
-	// 自定义数据类型解码器。入参为配置原始字符串，返回为解码后的结果
+	// Decoder for decoding raw configuration data into `Type`.
+	// It returns the decoded value as interface{} on success, otherwise, an error is returned.
 	Decode func(data string) (interface{}, error)
 }
 
-// WithDecodeHooks 设置自定义类型数据解码器
+// WithDecodeHooks sets user-defined decoders
 func WithDecodeHooks(hooks ...DecodeHook) option {
 	return func(o *options) {
 		o.hooks = hooks

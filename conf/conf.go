@@ -17,6 +17,7 @@
  *
  */
 
+// Package conf is a framework for reading configurations from variety of configuration Stores, such as ENV, files, and Apollo.
 package conf
 
 import (
@@ -31,7 +32,8 @@ import (
 	"github.com/antigloss/go/conf/store"
 )
 
-// New 创建 ConfigParser 对象
+// New creates a ConfigParser object
+//   - T is the struct for unmarshalling configuration data
 func New[T any](opts ...option) *ConfigParser[T] {
 	c := &ConfigParser[T]{
 		viper:     viper.New(),
@@ -42,9 +44,9 @@ func New[T any](opts ...option) *ConfigParser[T] {
 	return c
 }
 
-// ConfigParser 配置解析器。支持多种配置存储方式、多种配置格式、动态更新、模板替换
+// ConfigParser configuration data parser. It supports variety of configuration Stores, mainstream configuration formats, watching, and templates
 //
-//	T - 承载配置解析结果的结构体
+//	T - struct for unmarshalling configuration data
 type ConfigParser[T any] struct {
 	opts      options
 	viper     *viper.Viper
@@ -53,7 +55,7 @@ type ConfigParser[T any] struct {
 	watchOnce sync.Once
 }
 
-// Parse 从各个 Store 中读取配置，然后反序列化到 T 里面
+// Parse reads configuration data from all Stores, then unmarshal it to `T`.
 func (c *ConfigParser[T]) Parse() (*T, error) {
 	var t T
 
@@ -85,7 +87,7 @@ func (c *ConfigParser[T]) Parse() (*T, error) {
 	return &t, nil
 }
 
-// Watch 监听各个 Store 的配置变更，把最新的配置反序列化到 T 里面，然后通过回调函数告知
+// Watch watches configuration changes from all Stores, unmarshal the latest configuration data into `T`, then notify the caller via `cb`
 func (c *ConfigParser[T]) Watch(cb func(cfg *T, changes []store.ConfigChange)) error {
 	var err error
 
@@ -123,7 +125,7 @@ func (c *ConfigParser[T]) Watch(cb func(cfg *T, changes []store.ConfigChange)) e
 	return err
 }
 
-// Unwatch 取消监听
+// Unwatch stops watching
 func (c *ConfigParser[T]) Unwatch() {
 	for _, store := range c.opts.stores {
 		store.Unwatch()
