@@ -1,7 +1,7 @@
 apollo_config:
   end_point: http://apollo.meta
-  app_id: {{env "APOLLO_APPID_TEST"}}
+  app_id: {{env "APOLLO_APPID_TEST"}} # reads the configuration with key 'APOLLO_APPID_TEST' from ENV and replaces the template
   cluster: {{env "APOLLO_CLUSTER_TEST"}}
-  app_secret: {{env "APOLLO_SECRET_TEST"}}
+  app_secret: {{value "APOLLO_SECRET_TEST"}}
   namespaces:
     - test.yaml
