@@ -1,0 +1,16 @@
+apollo-keys:
+  account: key   # Apollo access key for Apollo App account
+  activity: key
+
+account: # Use the following configs to override configs on Apollo for App account
+  listenaddr: :8088
+  prometheus.addr: :9098
+
+activity:
+  listenaddr: :8089
+  prometheus.addr: :9099
+
+taptap:
+  listenaddr: :8080
+  service.community.addr: 127.0.0.1:80
+  domain.webapi: localhost

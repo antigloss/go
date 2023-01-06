@@ -1,0 +1,7 @@
+apollo_config:
+  end_point: http://apollo.meta
+  app_id: {{env "APOLLO_APPID_TEST"}}
+  cluster: {{env "APOLLO_CLUSTER_TEST"}}
+  app_secret: {{env "APOLLO_SECRET_TEST"}}
+  namespaces:
+    - test.yaml
