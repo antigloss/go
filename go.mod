@@ -11,7 +11,6 @@ require (
 	github.com/spf13/viper v1.14.0
 	github.com/taptap/go-apollo v1.3.0
 	golang.org/x/exp v0.0.0-20230111222715-75897c7a292a
-	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

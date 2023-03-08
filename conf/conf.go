@@ -238,7 +238,7 @@ func (c *ConfigParser[T]) unmarshal(t *T) error {
 			if c.opts.tagName != "" {
 				config.TagName = c.opts.tagName
 			}
-		}, viper.DecodeHook(decodeHook(c.opts.hooks)))
+		}, viper.DecodeHook(decodeHook(c.opts.hook)))
 	}
 
 	ty := reflect.TypeOf(*t)
@@ -249,7 +249,7 @@ func (c *ConfigParser[T]) unmarshal(t *T) error {
 			if c.opts.tagName != "" {
 				config.TagName = c.opts.tagName
 			}
-		}, viper.DecodeHook(decodeHook(c.opts.hooks)))
+		}, viper.DecodeHook(decodeHook(c.opts.hook)))
 		if err != nil {
 			return err
 		}

@@ -21,6 +21,7 @@ package examples_test
 
 import (
 	"log"
+	"reflect"
 
 	"github.com/antigloss/go/conf"
 	"github.com/antigloss/go/conf/store"
@@ -49,6 +50,20 @@ func ExampleConfFromEnv() {
 	c := conf.New[ExampleConfig](
 		conf.WithTagName("json"),   // Tag name must match with the tag name defined inside the struct for unmarshalling the configurations. Default tag name is mapstructure
 		conf.WithStores(env.New()), // Create a Store object for reading configurations from ENV
+		conf.WithDecodeHook(func(to reflect.Type, data string) (interface{}, error) { // Set a decoder to decode user-defined data types
+			// Decoding implementation goes here
+			//switch to {
+			//case reflect.TypeOf(UserDefinedType1{}):
+			//	obj := UserDefinedType1{}
+			//	err := obj.Parse(data)
+			//	return obj, err
+			//case reflect.TypeOf(UserDefinedType2{}):
+			//	obj := UserDefinedType2{}
+			//	err := obj.Parse(data)
+			//	return obj, err
+			//}
+			return data, nil
+		}),
 	)
 
 	bc, err := c.Parse()

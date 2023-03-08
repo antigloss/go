@@ -39,19 +39,14 @@ func WithTagName(tag string) option {
 	}
 }
 
-// DecodeHook decoder for a specified data type
-type DecodeHook struct {
-	// Data type
-	Type reflect.Type
-	// Decoder for decoding raw configuration data into `Type`.
-	// It returns the decoded value as interface{} on success, otherwise, an error is returned.
-	Decode func(data string) (interface{}, error)
-}
+// DecodeHook decodes `data` to an object of type `to`.
+// It returns the decoded value as interface{} on success, otherwise, an error is returned.
+type DecodeHook func(to reflect.Type, data string) (interface{}, error)
 
-// WithDecodeHooks sets user-defined decoders
-func WithDecodeHooks(hooks ...DecodeHook) option {
+// WithDecodeHook sets a user-defined decoder
+func WithDecodeHook(hook DecodeHook) option {
 	return func(o *options) {
-		o.hooks = hooks
+		o.hook = hook
 	}
 }
 
@@ -60,7 +55,7 @@ type option func(opts *options)
 type options struct {
 	stores  []store.Store
 	tagName string
-	hooks   []DecodeHook
+	hook    DecodeHook
 }
 
 func (o *options) apply(opts ...option) {
