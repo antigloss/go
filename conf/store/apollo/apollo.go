@@ -171,6 +171,10 @@ func (a *apolloStore) nsToContent(ns, confType string) ([]byte, error) {
 }
 
 func (a *apolloStore) confToContent(conf apollo.Configurations, ns, confType string) ([]byte, error) {
+	if len(conf) == 0 {
+		return nil, fmt.Errorf("empty apollo conf. addr=%s app=%s cluster=%s ns=%s", a.opts.addr, a.opts.appID, a.opts.cluster, ns)
+	}
+
 	var cont []byte
 	var err error
 

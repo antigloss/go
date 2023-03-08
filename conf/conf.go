@@ -22,12 +22,16 @@ package conf
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v3"
 
 	"github.com/antigloss/go/conf/store"
 )
@@ -35,7 +39,15 @@ import (
 // New creates a ConfigParser object
 //   - T is the struct for unmarshalling configuration data
 func New[T any](opts ...option) *ConfigParser[T] {
+	isSlice := false
+	var t T
+	ty := reflect.TypeOf(t)
+	if ty.Kind() == reflect.Slice {
+		isSlice = true
+	}
+
 	c := &ConfigParser[T]{
+		isSlice:   isSlice,
 		viper:     viper.New(),
 		changesCh: make(chan *store.ConfigChanges, 20),
 		unwatchCh: make(chan int),
@@ -48,6 +60,8 @@ func New[T any](opts ...option) *ConfigParser[T] {
 //   - `T` is the struct for unmarshalling configuration data
 type ConfigParser[T any] struct {
 	opts      options
+	isSlice   bool
+	sliceLen  int
 	viper     *viper.Viper
 	changesCh chan *store.ConfigChanges
 	unwatchCh chan int
@@ -70,6 +84,11 @@ func (c *ConfigParser[T]) Parse() (*T, error) {
 		}
 
 		for _, cont := range contents {
+			err = c.transformArray(&cont)
+			if err != nil {
+				return nil, err
+			}
+
 			c.viper.SetConfigType(cont.Type)
 			err = c.viper.MergeConfig(bytes.NewReader(cont.Content))
 			if err != nil {
@@ -101,8 +120,13 @@ func (c *ConfigParser[T]) Watch(cb func(cfg *T, changes []store.ConfigChange)) e
 			for {
 				select {
 				case changes := <-c.changesCh:
+					e := c.transformArray(&changes.Config)
+					if e != nil {
+						continue
+					}
+
 					c.viper.SetConfigType(changes.Config.Type)
-					e := c.viper.MergeConfig(bytes.NewReader(changes.Config.Content))
+					e = c.viper.MergeConfig(bytes.NewReader(changes.Config.Content))
 					if e != nil {
 						continue
 					}
@@ -133,10 +157,13 @@ func (c *ConfigParser[T]) Unwatch() {
 }
 
 func (c *ConfigParser[T]) initDefaultValues(v reflect.Value) error {
-	m := map[string]interface{}{}
-	c.getDefaultValues(v.Type(), m)
-	c.viper.SetConfigType(store.ConfigTypeYAML)
-	return c.viper.MergeConfigMap(m)
+	if v.Kind() == reflect.Struct {
+		m := map[string]interface{}{}
+		c.getDefaultValues(v.Type(), m)
+		c.viper.SetConfigType(store.ConfigTypeYAML)
+		return c.viper.MergeConfigMap(m)
+	}
+	return nil
 }
 
 func (c *ConfigParser[T]) getDefaultValues(t reflect.Type, m map[string]interface{}) {
@@ -167,10 +194,69 @@ func (c *ConfigParser[T]) getDefaultValues(t reflect.Type, m map[string]interfac
 	}
 }
 
+// transformArray 把数组格式的配置，转换成对象格式
+func (c *ConfigParser[T]) transformArray(cont *store.ConfigContent) error {
+	if !c.isSlice {
+		return nil
+	}
+
+	var err error
+	var s []interface{}
+
+	switch cont.Type {
+	case store.ConfigTypeJSON:
+		err = json.Unmarshal(cont.Content, &s)
+	case store.ConfigTypeYAML, store.ConfigTypeYML:
+		err = yaml.Unmarshal(cont.Content, &s)
+	default:
+		err = fmt.Errorf("unsupported config format: %s", cont.Type)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	m := map[int]interface{}{}
+	for k, v := range s {
+		m[k] = v
+	}
+
+	bs, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	c.sliceLen = len(s)
+	cont.Type = store.ConfigTypeJSON
+	cont.Content = bs
+	return nil
+}
+
 func (c *ConfigParser[T]) unmarshal(t *T) error {
-	return c.viper.Unmarshal(t, func(config *mapstructure.DecoderConfig) {
-		if c.opts.tagName != "" {
-			config.TagName = c.opts.tagName
+	if !c.isSlice {
+		return c.viper.Unmarshal(t, func(config *mapstructure.DecoderConfig) {
+			if c.opts.tagName != "" {
+				config.TagName = c.opts.tagName
+			}
+		}, viper.DecodeHook(decodeHook(c.opts.hooks)))
+	}
+
+	ty := reflect.TypeOf(*t)
+	v := reflect.ValueOf(*t)
+	for i := 0; i < c.sliceLen; i++ {
+		elem := reflect.New(ty.Elem())
+		err := c.viper.UnmarshalKey(strconv.Itoa(i), elem.Interface(), func(config *mapstructure.DecoderConfig) {
+			if c.opts.tagName != "" {
+				config.TagName = c.opts.tagName
+			}
+		}, viper.DecodeHook(decodeHook(c.opts.hooks)))
+		if err != nil {
+			return err
 		}
-	}, viper.DecodeHook(decodeHook(c.opts.hooks)))
+
+		v = reflect.Append(v, elem.Elem())
+	}
+
+	*t = v.Interface().(T)
+	return nil
 }
